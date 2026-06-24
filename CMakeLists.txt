@@ -1,0 +1,56 @@
+cmake_minimum_required(VERSION 3.13)
+project(moduleCompression
+    LANGUAGES C CXX
+)
+# We need compile_commands.json for the include paths in some editors
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE INTERNAL "")
+
+# Put all binaries we'll need to distribute in 1 folder
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+
+# Force shared libraries to load from a relative path instead of hardcoding
+# their path on my computer (why is this the default?)
+set(CMAKE_SKIP_BUILD_RPATH FALSE)
+set(CMAKE_BUILD_RPATH_USE_ORIGIN TRUE)
+set(CMAKE_INSTALL_RPATH "$ORIGIN")
+set(CMAKE_INSTALL_RPATH_USE_LINK_PATH FALSE)
+
+
+set(CMAKE_C_STANDARD 11)
+
+include_directories(
+    lib
+    lib/ma_trackerFormats
+    lib/miniaudio
+)
+
+# set(BOBTAIL_OPENGL ON)
+# add_subdirectory(lib/bobtail)
+
+add_library(miniaudio STATIC lib/miniaudio/miniaudio.c)
+target_include_directories(miniaudio PUBLIC lib/miniaudio)
+target_compile_definitions(miniaudio PUBLIC
+    MA_NO_NODE_GRAPH MA_NO_RESOURCE_MANAGER
+    MA_NO_GENERATION MA_NO_ENCODING MA_NO_FLAC
+)
+
+# Link this for Miniaudio with tracker module support
+add_subdirectory(lib/ma_trackerFormats)
+add_library(ma_trackerFormats STATIC
+    lib/ma_trackerFormats/ibxm_reader.c
+    lib/ma_trackerFormats/miniaudio_ibxm.c
+    lib/ma_trackerFormats/miniaudio_it2play.c
+)
+target_link_libraries(ma_trackerFormats PUBLIC miniaudio ibxm IT2)
+target_include_directories(miniaudio PUBLIC lib/ma_trackerFormats lib/ma_trackerFormats/lib/it2play)
+
+# We only need to explictly link with the math library (just "m") on Linux.
+set(MATH_LIB "m")
+if(MSVC)
+    set(MATH_LIB "")
+endif()
+
+add_executable(modTool src/main.c)
+
+target_link_libraries(modTool PRIVATE ma_trackerFormats ${MATH_LIB})
