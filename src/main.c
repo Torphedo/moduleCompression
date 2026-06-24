@@ -3,6 +3,8 @@
 #include <sys/stat.h>
 
 #include <miniaudio.h>
+#include <miniaudio_libvorbis.h>
+#include <miniaudio_libopus.h>
 #include "miniaudio_ibxm.h"
 #include "miniaudio_it2play.h"
 
@@ -22,6 +24,8 @@ int main(int argc, char** argv) {
     const char* path = argv[1];
 
     ma_decoding_backend_vtable* customDecoders[] = {
+        ma_decoding_backend_libvorbis,
+        ma_decoding_backend_libopus,
         ma_decoding_backend_ibxm,
         ma_decoding_backend_it2,
     };

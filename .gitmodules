@@ -4,3 +4,12 @@
 [submodule "lib/miniaudio"]
 	path = lib/miniaudio
 	url = https://github.com/mackron/miniaudio
+[submodule "lib/opus"]
+	path = lib/opus
+	url = https://github.com/xiph/opus
+[submodule "lib/vorbis"]
+	path = lib/vorbis
+	url = https://github.com/xiph/vorbis
+[submodule "lib/opusfile"]
+	path = lib/opusfile
+	url = https://github.com/xiph/opusfile

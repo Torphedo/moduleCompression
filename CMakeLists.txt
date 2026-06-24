@@ -28,12 +28,24 @@ include_directories(
 # set(BOBTAIL_OPENGL ON)
 # add_subdirectory(lib/bobtail)
 
-add_library(miniaudio STATIC lib/miniaudio/miniaudio.c)
-target_include_directories(miniaudio PUBLIC lib/miniaudio)
+add_subdirectory(lib/opusfile)
+add_subdirectory(lib/vorbis)
+
+add_library(miniaudio STATIC
+    lib/miniaudio/miniaudio.c
+    lib/miniaudio/extras/decoders/libvorbis/miniaudio_libvorbis.c
+    lib/miniaudio/extras/decoders/libopus/miniaudio_libopus.c
+)
+target_include_directories(miniaudio PUBLIC
+    lib/miniaudio
+    lib/miniaudio/extras/decoders/libvorbis
+    lib/miniaudio/extras/decoders/libopus
+)
 target_compile_definitions(miniaudio PUBLIC
     MA_NO_NODE_GRAPH MA_NO_RESOURCE_MANAGER
     MA_NO_GENERATION MA_NO_ENCODING MA_NO_FLAC
 )
+target_link_libraries(miniaudio PUBLIC opusfile vorbisfile)
 
 # Link this for Miniaudio with tracker module support
 add_subdirectory(lib/ma_trackerFormats)
