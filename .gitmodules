@@ -13,3 +13,9 @@
 [submodule "lib/opusfile"]
 	path = lib/opusfile
 	url = https://github.com/xiph/opusfile
+[submodule "lib/bobtail"]
+	path = lib/bobtail
+	url = https://github.com/torphedo/bobtail
+[submodule "lib/opusenc"]
+	path = lib/opusenc
+	url = https://github.com/xiph/libopusenc

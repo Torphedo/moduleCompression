@@ -25,9 +25,8 @@ include_directories(
     lib/miniaudio
 )
 
-# set(BOBTAIL_OPENGL ON)
-# add_subdirectory(lib/bobtail)
-
+add_subdirectory(lib/bobtail)
+add_subdirectory(lib/opus)
 add_subdirectory(lib/opusfile)
 add_subdirectory(lib/vorbis)
 
@@ -44,6 +43,7 @@ target_include_directories(miniaudio PUBLIC
 target_compile_definitions(miniaudio PUBLIC
     MA_NO_NODE_GRAPH MA_NO_RESOURCE_MANAGER
     MA_NO_GENERATION MA_NO_ENCODING MA_NO_FLAC
+    MA_NO_ENGINE
 )
 target_link_libraries(miniaudio PUBLIC opusfile vorbisfile)
 
@@ -63,6 +63,6 @@ if(MSVC)
     set(MATH_LIB "")
 endif()
 
-add_executable(modTool src/main.c)
+add_executable(modTool src/main.c src/rewriteXM.c)
 
-target_link_libraries(modTool PRIVATE ma_trackerFormats ${MATH_LIB})
+target_link_libraries(modTool PRIVATE opus ma_trackerFormats bobtail ${MATH_LIB})
