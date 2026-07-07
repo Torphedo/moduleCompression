@@ -30,6 +30,19 @@ add_subdirectory(lib/opus)
 add_subdirectory(lib/opusfile)
 add_subdirectory(lib/vorbis)
 
+add_library(opusenc STATIC
+    lib/opusenc/src/ogg_packer.c
+    lib/opusenc/src/opus_header.c
+    lib/opusenc/src/opusenc.c
+    lib/opusenc/src/picture.c
+    lib/opusenc/src/random.c
+    lib/opusenc/src/resample.c
+    lib/opusenc/src/unicode_support.c
+)
+target_include_directories(opusenc PUBLIC lib/opusenc/include)
+target_link_libraries(opusenc PUBLIC opus)
+target_compile_definitions(opusenc PUBLIC RANDOM_PREFIX=libopusenc OUTSIDE_SPEEX PACKAGE_NAME="moduleCompression" PACKAGE_VERSION="1.0")
+
 add_library(miniaudio STATIC
     lib/miniaudio/miniaudio.c
     lib/miniaudio/extras/decoders/libvorbis/miniaudio_libvorbis.c
@@ -65,4 +78,4 @@ endif()
 
 add_executable(modTool src/main.c src/rewriteXM.c)
 
-target_link_libraries(modTool PRIVATE opus ma_trackerFormats bobtail ${MATH_LIB})
+target_link_libraries(modTool PRIVATE ma_trackerFormats bobtail opusenc ${MATH_LIB})
