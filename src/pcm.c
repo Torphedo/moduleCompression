@@ -73,3 +73,14 @@ void pcmDeltaEncode16(const int16_t* pcmIn, int16_t* out, uint32_t sampleCount) 
     }
 }
 
+void pcm8to16(const int8_t* in, int16_t* out, uint32_t sampleCount) {
+    for (uint32_t i = 0; i < sampleCount; i++) {
+        out[i] = (int16_t)in[i] << 8;
+    }
+}
+
+void pcm16to8(const int16_t* in, int8_t* out, uint32_t sampleCount) {
+    for (uint32_t i = 0; i < sampleCount; i++) {
+        out[i] = in[i] >> 8;
+    }
+}

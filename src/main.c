@@ -73,6 +73,9 @@ bool decodeOpusModule(const char* inpath, const char* outpath) {
     if (path_has_extension(inpath, "xm") || path_has_extension(inpath, "XM")) {
         return decodeOpusXM(inpath, outpath);
     }
+    if (path_has_extension(inpath, "s3m") || path_has_extension(inpath, "S3M")) {
+        return decodeOpusS3M(inpath, outpath);
+    }
 
     return false;
 }
