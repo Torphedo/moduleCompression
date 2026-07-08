@@ -1,3 +1,4 @@
+#include <string.h>
 #include "rewriteS3M.h"
 #include "VirtualIO.h"
 #include "s3m.h"
@@ -45,6 +46,12 @@ S3MHeader copyNoteDataS3M(VirtualIO* in, VirtualIO* out, const uint16_t** instrP
 }
 
 bool writeOpusSampleS3M(VirtualIO* io, const void* data, S3MInstrumentPCM pcm) {
+    if (pcm.lengthBytes <= 1024 || pcm.pack == 1) {
+        // Don't bother compressing tiny samples or ADPCM
+        io->write(io, data, pcm.lengthBytes);
+        return true;
+    }
+
     uint8_t channels = (pcm.flags & S3M_PCM_INSTR_FLAG_STEREO) ? 2 : 1;
     channels = 1; // I think Opus expects interleaved samples
 
@@ -63,13 +70,17 @@ bool writeOpusSampleS3M(VirtualIO* io, const void* data, S3MInstrumentPCM pcm) {
 
     const void* pcmBuf = data;
     if (sampleSize == 1) {
-        void* buf = malloc(pcm.lengthBytes * 2);
-        if (!buf) {
+        void* signBuf = calloc(1, pcm.lengthBytes);
+        void* buf = calloc(1, pcm.lengthBytes * 2);
+        if (!buf || !signBuf) {
             ope_encoder_destroy(enc);
             ope_comments_destroy(comments);
             return false;
         }
-        pcm8to16(data, buf, sampleCount);
+
+        memcpy(signBuf, data, pcm.lengthBytes);
+        pcmSign8(signBuf, sampleCount);
+        pcmU8to16(signBuf, buf, sampleCount);
         pcmBuf = buf;
     }
 
@@ -85,16 +96,27 @@ bool writeOpusSampleS3M(VirtualIO* io, const void* data, S3MInstrumentPCM pcm) {
 }
 
 bool decodeOpusSampleS3M(VirtualIO* io, const void* data, S3MInstrumentPCM pcm) {
+    static int id = 1;
+    char path[32];
+    sprintf(path, "sample%d.ogg", id++);
+    FILE* f = fopen(path, "wb");
+    if (f) {
+        fwrite(data, pcm.lengthBytes, 1, f);
+        fclose(f);
+    }
+
     const uint8_t sampleSize = (pcm.flags & S3M_PCM_INSTR_FLAG_16BIT) ? 2 : 1;
     int error;
     OggOpusFile* file = op_open_memory(data, pcm.lengthBytes, &error);
-    if (!file && error == OP_ENOTFORMAT) {
-        // Not Opus, must be a tiny uncompressed sample
-        io->write(io, data, pcm.lengthBytes);
-        return true;
-    } else if (!file) {
-        printf("Failed to open Opus stream!\n");
-        return false;
+    if (!file) {
+        if (error == OP_ENOTFORMAT) {
+            // Not Opus, must be a tiny uncompressed sample
+            io->write(io, data, pcm.lengthBytes);
+            return true;
+        } else {
+            printf("Failed to open Opus stream!\n");
+            return false;
+        }
     }
 
     const int sampleCount = op_pcm_total(file, -1);
@@ -104,9 +126,9 @@ bool decodeOpusSampleS3M(VirtualIO* io, const void* data, S3MInstrumentPCM pcm) 
         return false;
     }
     ogg_int64_t bufSize = sampleCount * sizeof(uint16_t);
-    void* buf = malloc(bufSize);
+    void* buf = calloc(1, bufSize);
     if (!buf) {
-        printf("Failed to allocate %d bytes for uncompressed audio!\n", bufSize);
+        printf("Failed to allocate %ld bytes for uncompressed audio!\n", bufSize);
         op_free(file);
         return false;
     }
@@ -127,14 +149,64 @@ bool decodeOpusSampleS3M(VirtualIO* io, const void* data, S3MInstrumentPCM pcm) 
 
     // Convert to 8-bit if needed
     if (sampleSize == 1) {
-        pcm16to8(buf, buf, sampleCount);
+        pcmS16to8(buf, buf, sampleCount);
+        pcmSign8(buf, sampleCount);
         bufSize /= 2;
+    } else {
+        int16_t t = (int16_t)0x1000;
+        uint16_t q = (uint16_t)0x7000;
+        pcmSign16(buf, sampleCount);
     }
 
     io->write(io, buf, bufSize);
     free(buf);
     op_free(file);
     return true;
+}
+
+typedef bool (*SampleWriterS3M)(VirtualIO* io, const void* data, S3MInstrumentPCM pcm);
+
+void rewriteS3M(VirtualIO* in, VirtualIO* out, SampleWriterS3M writeSample) {
+    const uint16_t* instrTable;
+    S3MHeader header = copyNoteDataS3M(in, out, &instrTable);
+    if (header.sampleType == 1) {
+        printf("Samples are signed!\n");
+    } else {
+        printf("Samples are unsigned!\n");
+    }
+
+    for (uint32_t i = 0; i < header.instrumentCount; i++) {
+        const uint64_t offset = instrTable[i] * 16; // Pointer is in units of 16 bytes
+        VIO_DUAL_SEEK(in, out, offset);
+
+        // Copy instrument metadata
+        S3MInstrumentHeader instr;
+        in->read(in, &instr, sizeof(instr));
+
+        if (instr.type == S3M_INSTR_EMPTY) {
+            // Move on
+            continue;
+        } else if (instr.type == S3M_INSTR_PCM) {
+            const uint32_t size = instr.pcm.lengthBytes;
+            uint32_t sampleOffset = ((uint32_t)instr.pcm.samplePtrHigh << 16) | instr.pcm.samplePtrLow;
+            sampleOffset *= 16;
+
+            // Copy sample data
+            VIO_DUAL_SEEK(in, out, sampleOffset);
+            const void* sample = in->constRead(in, size);
+            (writeSample)(out, sample, instr.pcm);
+
+            const uint64_t sampleEndOffset = out->tell(out);
+            instr.pcm.lengthBytes = sampleEndOffset - sampleOffset;
+            printf("Input audio %d bytes, output audio %d bytes\n", size, instr.pcm.lengthBytes);
+
+            in->free(in, sample);
+        }
+
+        out->seek(out, offset);
+        out->write(out, &instr, sizeof(instr));
+    }
+    in->free(in, instrTable);
 }
 
 bool writeOpusS3M(const char* inpath, const char* outpath) {
@@ -147,47 +219,7 @@ bool writeOpusS3M(const char* inpath, const char* outpath) {
         return false;
     }
 
-    const uint16_t* instrTable;
-    S3MHeader header = copyNoteDataS3M(&in, &out, &instrTable);
-
-    for (uint32_t i = 0; i < header.instrumentCount; i++) {
-        const uint64_t offset = instrTable[i] * 16; // Pointer is in units of 16 bytes
-        VIO_DUAL_SEEK(&in, &out, offset);
-
-        // Copy instrument metadata
-        S3MInstrumentHeader instr;
-        in.read(&in, &instr, sizeof(instr));
-
-        if (instr.type == S3M_INSTR_EMPTY) {
-            // Move on
-            continue;
-        } else if (instr.type == S3M_INSTR_PCM) {
-            const uint32_t size = instr.pcm.lengthBytes;
-            uint32_t sampleOffset = ((uint32_t)instr.pcm.samplePtrHigh << 16) | instr.pcm.samplePtrLow;
-            sampleOffset *= 16;
-
-            // Copy sample data
-            VIO_DUAL_SEEK(&in, &out, sampleOffset);
-            const void* sample = in.constRead(&in, size);
-            if (size > 1024) {
-                writeOpusSampleS3M(&out, sample, instr.pcm);
-            } else {
-                // Don't bother compressing tiny samples
-                out.write(&out, sample, size);
-            }
-
-            const uint64_t sampleEndOffset = out.tell(&out);
-            instr.pcm.lengthBytes = sampleEndOffset - sampleOffset;
-            printf("Compressed %d bytes raw audio to %d bytes\n", size, instr.pcm.lengthBytes);
-
-            in.free(&in, sample);
-        }
-
-        out.seek(&out, offset);
-        out.write(&out, &instr, sizeof(instr));
-    }
-    in.free(&in, instrTable);
-
+    rewriteS3M(&in, &out, writeOpusSampleS3M);
     in.close(&in);
     out.close(&out);
     return true;
@@ -203,42 +235,7 @@ bool decodeOpusS3M(const char* inpath, const char* outpath) {
         return false;
     }
 
-    const uint16_t* instrTable;
-    S3MHeader header = copyNoteDataS3M(&in, &out, &instrTable);
-
-    for (uint32_t i = 0; i < header.instrumentCount; i++) {
-        const uint64_t offset = instrTable[i] * 16; // Pointer is in units of 16 bytes
-        VIO_DUAL_SEEK(&in, &out, offset);
-
-        // Copy instrument metadata
-        S3MInstrumentHeader instr;
-        in.read(&in, &instr, sizeof(instr));
-
-        if (instr.type == S3M_INSTR_EMPTY) {
-            // Move on
-            continue;
-        } else if (instr.type == S3M_INSTR_PCM) {
-            const uint32_t size = instr.pcm.lengthBytes;
-            uint32_t sampleOffset = ((uint32_t)instr.pcm.samplePtrHigh << 16) | instr.pcm.samplePtrLow;
-            sampleOffset *= 16;
-
-            // Copy sample data
-            VIO_DUAL_SEEK(&in, &out, sampleOffset);
-            const void* sample = in.constRead(&in, size);
-            decodeOpusSampleS3M(&out, sample, instr.pcm);
-
-            const uint64_t sampleEndOffset = out.tell(&out);
-            instr.pcm.lengthBytes = sampleEndOffset - sampleOffset;
-            printf("Compressed %d bytes raw audio to %d bytes\n", size, instr.pcm.lengthBytes);
-
-            in.free(&in, sample);
-        }
-
-        out.seek(&out, offset);
-        out.write(&out, &instr, sizeof(instr));
-    }
-    in.free(&in, instrTable);
-
+    rewriteS3M(&in, &out, decodeOpusSampleS3M);
     in.close(&in);
     out.close(&out);
     return true;

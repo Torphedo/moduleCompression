@@ -73,14 +73,53 @@ void pcmDeltaEncode16(const int16_t* pcmIn, int16_t* out, uint32_t sampleCount) 
     }
 }
 
-void pcm8to16(const int8_t* in, int16_t* out, uint32_t sampleCount) {
+void pcmU8to16(const uint8_t* in, uint16_t* out, uint32_t sampleCount) {
     for (uint32_t i = 0; i < sampleCount; i++) {
-        out[i] = (int16_t)in[i] << 8;
+        const uint16_t sample = in[i];
+        uint16_t sampleOut = (sample << 8) | (uint8_t)sample;
+        out[i] = sampleOut;
     }
 }
 
-void pcm16to8(const int16_t* in, int8_t* out, uint32_t sampleCount) {
+void pcmS8to16(const int8_t* in, int16_t* out, uint32_t sampleCount) {
     for (uint32_t i = 0; i < sampleCount; i++) {
-        out[i] = in[i] >> 8;
+        const int16_t sample = in[i];
+        int16_t sampleOut = (sample << 8) | (int8_t)sample;
+        out[i] = sampleOut;
+    }
+}
+
+void pcmU16to8(const uint16_t* in, uint8_t* out, uint32_t sampleCount) {
+    for (uint32_t i = 0; i < sampleCount; i++) {
+        const uint16_t sample = in[i];
+        const uint16_t sampleOut = sample >> 8;
+        out[i] = (uint8_t)sampleOut;
+    }
+}
+
+
+void pcmS16to8(const int16_t* in, int8_t* out, uint32_t sampleCount) {
+    for (uint32_t i = 0; i < sampleCount; i++) {
+        const int16_t sample = in[i];
+        const int16_t sampleOut = sample >> 8;
+        out[i] = (int8_t)sampleOut;
+    }
+}
+
+void pcmSign16(uint16_t* buf, uint32_t sampleCount) {
+    for (uint32_t i = 0; i < sampleCount; i++) {
+        const uint16_t sample = ((uint16_t*)buf)[i];
+        // Invert the sign bit
+        const uint16_t sampleOut = (sample & INT16_MAX) | (~sample & 0x8000);
+        buf[i] = sampleOut;
+    }
+}
+
+void pcmSign8(uint8_t* buf, uint32_t sampleCount) {
+    for (uint32_t i = 0; i < sampleCount; i++) {
+        const uint8_t sample = ((uint8_t*)buf)[i];
+        // Invert the sign bit
+        const uint8_t sampleOut = (sample & INT8_MAX) | (~sample & 0x80);
+        buf[i] = sampleOut;
     }
 }
