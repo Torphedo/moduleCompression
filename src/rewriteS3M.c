@@ -45,7 +45,7 @@ S3MHeader copyNoteDataS3M(VirtualIO* in, VirtualIO* out, const uint16_t** instrP
     return header;
 }
 
-bool writeOpusSampleS3M(VirtualIO* io, const void* data, S3MInstrumentPCM pcm) {
+bool writeOpusSampleS3M(VirtualIO* io, void* data, S3MInstrumentPCM pcm, bool signedSamples) {
     if (pcm.lengthBytes <= 1024 || pcm.pack == 1) {
         // Don't bother compressing tiny samples or ADPCM
         io->write(io, data, pcm.lengthBytes);
@@ -68,20 +68,25 @@ bool writeOpusSampleS3M(VirtualIO* io, const void* data, S3MInstrumentPCM pcm) {
         return false;
     }
 
-    const void* pcmBuf = data;
+    // Convert to signed values if needed
+    if (!signedSamples) {
+        if (sampleSize == 1) {
+            pcmSign8(data, sampleCount);
+        } else {
+            pcmSign16(data, sampleCount);
+        }
+    }
+
+    void* pcmBuf = data;
     if (sampleSize == 1) {
-        void* signBuf = calloc(1, pcm.lengthBytes);
-        void* buf = calloc(1, pcm.lengthBytes * 2);
-        if (!buf || !signBuf) {
+        pcmBuf = calloc(1, pcm.lengthBytes * 2);
+        if (!pcmBuf) {
             ope_encoder_destroy(enc);
             ope_comments_destroy(comments);
             return false;
         }
 
-        memcpy(signBuf, data, pcm.lengthBytes);
-        pcmSign8(signBuf, sampleCount);
-        pcmU8to16(signBuf, buf, sampleCount);
-        pcmBuf = buf;
+        pcmU8to16(data, pcmBuf, sampleCount);
     }
 
     ope_encoder_write(enc, pcmBuf, sampleCount / channels);
@@ -90,12 +95,12 @@ bool writeOpusSampleS3M(VirtualIO* io, const void* data, S3MInstrumentPCM pcm) {
     ope_comments_destroy(comments);
 
     if (sampleSize == 1) {
-        free((void*)pcmBuf);
+        free(pcmBuf);
     }
     return true;
 }
 
-bool decodeOpusSampleS3M(VirtualIO* io, const void* data, S3MInstrumentPCM pcm) {
+bool decodeOpusSampleS3M(VirtualIO* io, void* data, S3MInstrumentPCM pcm, bool signedSamples) {
     static int id = 1;
     char path[32];
     sprintf(path, "sample%d.ogg", id++);
@@ -150,12 +155,16 @@ bool decodeOpusSampleS3M(VirtualIO* io, const void* data, S3MInstrumentPCM pcm) 
     // Convert to 8-bit if needed
     if (sampleSize == 1) {
         pcmS16to8(buf, buf, sampleCount);
-        pcmSign8(buf, sampleCount);
         bufSize /= 2;
-    } else {
-        int16_t t = (int16_t)0x1000;
-        uint16_t q = (uint16_t)0x7000;
-        pcmSign16(buf, sampleCount);
+    }
+
+    // Convert to unsigned values if needed
+    if (!signedSamples) {
+        if (sampleSize == 1) {
+            pcmSign8(buf, sampleCount);
+        } else {
+            pcmSign16(buf, sampleCount);
+        }
     }
 
     io->write(io, buf, bufSize);
@@ -164,7 +173,7 @@ bool decodeOpusSampleS3M(VirtualIO* io, const void* data, S3MInstrumentPCM pcm) 
     return true;
 }
 
-typedef bool (*SampleWriterS3M)(VirtualIO* io, const void* data, S3MInstrumentPCM pcm);
+typedef bool (*SampleWriterS3M)(VirtualIO* io, void* data, S3MInstrumentPCM pcm, bool signedSamples);
 
 void rewriteS3M(VirtualIO* in, VirtualIO* out, SampleWriterS3M writeSample) {
     const uint16_t* instrTable;
@@ -193,14 +202,19 @@ void rewriteS3M(VirtualIO* in, VirtualIO* out, SampleWriterS3M writeSample) {
 
             // Copy sample data
             VIO_DUAL_SEEK(in, out, sampleOffset);
-            const void* sample = in->constRead(in, size);
-            (writeSample)(out, sample, instr.pcm);
+            void* sample = malloc(size);
+            if (!sample) {
+                printf("Failed to allocate %d bytes to read sample %d!\n", size, i);
+                continue;
+            }
+            in->read(in, sample, size);
+            (writeSample)(out, sample, instr.pcm, header.sampleType == 1);
+            free(sample);
 
             const uint64_t sampleEndOffset = out->tell(out);
             instr.pcm.lengthBytes = sampleEndOffset - sampleOffset;
             printf("Input audio %d bytes, output audio %d bytes\n", size, instr.pcm.lengthBytes);
 
-            in->free(in, sample);
         }
 
         out->seek(out, offset);
