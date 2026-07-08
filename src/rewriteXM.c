@@ -2,19 +2,19 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <stdio.h>
-#include <assert.h>
 
 #include <common/util.h>
 
 #include <opus/opus.h>
 #include "opusenc_stdio.h"
 #include "xm.h"
+#include "VirtualIO.h"
 
 enum {
     OPUS_MIN_SAMPLES = 120,
 };
 
-bool writeOpusSampleXM(FILE* f, void* data, uint32_t size) {
+bool writeOpusSampleXM(VirtualIO* io, const void* data, uint32_t size) {
     void* opusBuf = malloc(size);
     if (!opusBuf) {
         printf("Failed to allocate Opus output buffer!\n");
@@ -23,7 +23,7 @@ bool writeOpusSampleXM(FILE* f, void* data, uint32_t size) {
 
     int error;
     OggOpusComments* comments = ope_comments_create();
-    OggOpusEnc* enc = ope_encoder_create_callbacks(&opus_stdio_impl, f, comments, 48000, 1, 0, &error);
+    OggOpusEnc* enc = ope_encoder_create_callbacks(&opus_vio_impl, io, comments, 48000, 1, 0, &error);
     if (!enc) {
         printf("Failed to create encoder!\n");
         free(opusBuf);
@@ -43,110 +43,120 @@ bool writeOpusSampleXM(FILE* f, void* data, uint32_t size) {
     return true;
 }
 
-bool rewriteXM(const char* inpath, const char* outpath) {
-    FILE* in = fopen(inpath, "rb");
-    FILE* out = fopen(outpath, "wb");
-    if (!in || !out) {
-        if (in) {
-            fclose(in);
-        }
-        if (out) {
-            fclose(out);
-        }
+bool writeOpusXM(const char* inpath, const char* outpath) {
+    VirtualIO in = vioOpenPath(inpath, false);
+    VirtualIO out = vioOpenPath(outpath, true);
+    if (!in.ctx || !out.ctx) {
+        in.close(&in);
+        out.close(&out);
         printf("Failed to open one of the files!\n");
         return false;
     }
 
     XMHeader header = {0};
-    fread(&header, sizeof(header), 1, in);
-    fwrite(&header, sizeof(header), 1, out);
+    in.read(&in, &header, sizeof(header));
+    out.write(&out, &header, sizeof(header));
 
     for (uint32_t i = 0; i < header.patternCount; i++) {
         XMPattern pattern = {0};
-        const uint64_t pos = ftell(in);
-        fread(&pattern, sizeof(pattern), 1, in);
-        fwrite(&pattern, sizeof(pattern), 1, out);
+        const uint64_t pos = in.tell(&in);
+        in.read(&in, &pattern, sizeof(pattern));
+        out.write(&out, &pattern, sizeof(pattern));
         if (pattern.patternDataSize == 0) {
             continue;
         }
 
-        void* buf = malloc(pattern.patternDataSize);
+        const void* buf = in.constRead(&in, pattern.patternDataSize);
         if (!buf) {
-            printf("Failed to alloc %d bytes for pattern data!\n", pattern.patternDataSize);
+            printf("Failed to read %d bytes of pattern data!\n", pattern.patternDataSize);
             continue;
         }
-        fread(buf, pattern.patternDataSize, 1, in);
-        fwrite(buf, pattern.patternDataSize, 1, out);
-        free(buf);
+
+        out.write(&out, buf, pattern.patternDataSize);
+        in.free(&in, buf);
 
         const uint64_t nextOffset = pos + pattern.headerSize + pattern.patternDataSize;
-        fseek(in, nextOffset, SEEK_SET);
+        in.seek(&in, nextOffset);
     }
 
     uint32_t totalRawAudioSize = 0;
     uint32_t totalOpusSize = 0;
     for (uint32_t i = 0; i < header.instrumentCount; i++) {
-        const uint64_t inPos = ftell(in);
-        const uint64_t outPos = ftell(out);
+        const uint64_t inPos = in.tell(&in);
+        const uint64_t outPos = out.tell(&out);
         XMInstrument instr = {0};
-        fread(&instr, sizeof(instr), 1, in);
-        fwrite(&instr, sizeof(instr), 1, out);
+        in.read(&in, &instr, sizeof(instr));
+        out.write(&out, &instr, sizeof(instr));
 
         const uint64_t nextOffsetIn = inPos + instr.headerSize;
         const uint64_t nextOffsetOut = outPos + instr.headerSize;
         if (instr.sampleCount == 0) {
-            fseek(in, nextOffsetIn, SEEK_SET);
-            fseek(out, nextOffsetOut, SEEK_SET);
+            in.seek(&in, nextOffsetIn);
+            out.seek(&out, nextOffsetOut);
             continue; // No other data to copy
         }
 
         XMSampleSettings ss;
-        fread(&ss, sizeof(ss), 1, in);
-        fwrite(&ss, sizeof(ss), 1, out);
+        in.read(&in, &ss, sizeof(ss));
+        out.write(&out, &ss, sizeof(ss));
 
-        fseek(in, nextOffsetIn, SEEK_SET);
-        fseek(out, nextOffsetOut, SEEK_SET);
+        in.seek(&in, nextOffsetIn);
+        out.seek(&out, nextOffsetOut);
 
         XMSampleHeader* samples = malloc(sizeof(*samples) * instr.sampleCount);
         if (!samples) {
             printf("Failed to alloc for %d samples\n", instr.sampleCount);
             continue;
         }
-        fread(samples, sizeof(*samples), instr.sampleCount, in);
-        fwrite(samples, sizeof(*samples), instr.sampleCount, out);
+        const uint32_t sampleArrayPos = out.tell(&out);
+        const uint32_t sampleArraySize = sizeof(*samples) * instr.sampleCount;
+        in.read(&in, samples, sampleArraySize);
+        out.seek(&out, sampleArrayPos + sampleArraySize);
 
+        // We don't know the size of the samples until we compress them, so we
+        // need to compress and write all the sample data first.
         for (uint32_t j = 0; j < instr.sampleCount; j++) {
-            XMSampleHeader sample = samples[j];
+            XMSampleHeader* sample = &samples[j];
 
-            void* buf = malloc(ALIGN_UP(sample.length, OPUS_MIN_SAMPLES));
+            const void* buf = in.constRead(&in, sample->length);
             if (!buf) {
-                printf("Failed to alloc %d bytes for sample %d in instrument %d!\n", sample.length, j, i);
+                printf("Failed to read %d bytes from sample %d in instrument %d!\n", sample->length, j, i);
                 continue;
             }
-            fread(buf, sample.length, 1, in);
-            const size_t sampleStart = ftell(out);
+            const size_t sampleStart = out.tell(&out);
 
-            // fwrite(buf, sample.length, 1, out);
-
-            if (!writeOpusSampleXM(out, buf, sample.length)) {
+            if (!writeOpusSampleXM(&out, buf, sample->length)) {
                 printf("Failed to encode sample %d\n", j);
                 continue;
             } else {
                 printf("Wrote OGG sample @ 0x%lX\n", sampleStart);
             }
-            const size_t sampleEnd = ftell(out);
-            const uint32_t opusSize = (sampleEnd - sampleStart);
-            totalOpusSize += opusSize;
-            totalRawAudioSize += sample.length;
 
-            printf("Copied instrument %d's sample %d data (%d bytes raw, %d bytes compressed)\n", i, j, sample.length, opusSize);
-            free(buf);
+            in.free(&in, buf);
+
+            const size_t sampleEnd = out.tell(&out);
+            const uint32_t opusSize = (sampleEnd - sampleStart);
+            printf("Copied instrument %d's sample %d data (%d bytes raw, %d bytes compressed)\n", i, j, sample->length, opusSize);
+
+            totalOpusSize += opusSize;
+            totalRawAudioSize += sample->length;
+            sample->length = opusSize; // Size should be that of the compressed data
         }
+
+        // Go back and write the sample headers
+        const uint32_t nextPos = out.tell(&out);
+        out.seek(&out, sampleArrayPos);
+        out.write(&out, samples, sampleArraySize);
+        out.seek(&out, nextPos); // Return to where we left off
         free(samples);
     }
     printf("Converted %d bytes raw audio to %d bytes Opus audio\n", totalRawAudioSize, totalOpusSize);
 
-    fclose(in);
-    fclose(out);
+    in.close(&in);
+    out.close(&out);
     return true;
+}
+
+bool decodeOpusXM(const char* inpath, const char* outpath) {
+    return false;
 }

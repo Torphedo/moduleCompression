@@ -57,11 +57,20 @@ void playFile(const char* path) {
     ma_decoder_uninit(&decoder);
 }
 
-bool rewriteModule(const char* inpath, const char* outpath) {
+bool writeOpusModule(const char* inpath, const char* outpath) {
     if (path_has_extension(inpath, "xm") || path_has_extension(inpath, "XM")) {
-        return rewriteXM(inpath, outpath);
+        return writeOpusXM(inpath, outpath);
     }
 
+    return false;
+}
+
+bool decodeOpusModule(const char* inpath, const char* outpath) {
+    if (path_has_extension(inpath, "xm") || path_has_extension(inpath, "XM")) {
+        return decodeOpusXM(inpath, outpath);
+    }
+
+    return false;
 }
 
 int main(int argc, char** argv) {
@@ -71,7 +80,7 @@ int main(int argc, char** argv) {
     } else if (argc == 3) {
         const char* inpath = argv[1];
         const char* outpath = argv[2];
-        rewriteModule(inpath, outpath);
+        writeOpusModule(inpath, outpath);
     } else {
         printf("Usage: %s [audio file]\n", argv[0]);
         return 1;

@@ -76,6 +76,6 @@ if(MSVC)
     set(MATH_LIB "")
 endif()
 
-add_executable(modTool src/main.c src/rewriteXM.c)
+add_executable(modTool src/main.c src/rewriteXM.c src/VirtualIO.c)
 
 target_link_libraries(modTool PRIVATE ma_trackerFormats bobtail opusenc ${MATH_LIB})
