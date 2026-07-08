@@ -47,7 +47,8 @@ S3MHeader copyNoteDataS3M(VirtualIO* in, VirtualIO* out, const uint16_t** instrP
 
 bool writeOpusSampleS3M(VirtualIO* io, void* data, S3MInstrumentPCM pcm, bool signedSamples) {
     if (pcm.lengthBytes <= 1024 || pcm.pack == 1) {
-        // Don't bother compressing tiny samples or ADPCM
+        // Don't bother compressing tiny samples or ADPCM, the OGG container
+        // seems to have ~1KiB minimum overhead
         io->write(io, data, pcm.lengthBytes);
         return true;
     }
@@ -101,15 +102,6 @@ bool writeOpusSampleS3M(VirtualIO* io, void* data, S3MInstrumentPCM pcm, bool si
 }
 
 bool decodeOpusSampleS3M(VirtualIO* io, void* data, S3MInstrumentPCM pcm, bool signedSamples) {
-    static int id = 1;
-    char path[32];
-    sprintf(path, "sample%d.ogg", id++);
-    FILE* f = fopen(path, "wb");
-    if (f) {
-        fwrite(data, pcm.lengthBytes, 1, f);
-        fclose(f);
-    }
-
     const uint8_t sampleSize = (pcm.flags & S3M_PCM_INSTR_FLAG_16BIT) ? 2 : 1;
     int error;
     OggOpusFile* file = op_open_memory(data, pcm.lengthBytes, &error);
