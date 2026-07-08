@@ -10,6 +10,7 @@
 
 #include <common/path.h>
 #include "rewriteXM.h"
+#include "rewriteS3M.h"
 
 void data_callback(ma_device* pDevice, void* pOutput, const void* pInput, ma_uint32 frameCount) {
     ma_decoder* dec = pDevice->pUserData;
@@ -60,6 +61,9 @@ void playFile(const char* path) {
 bool writeOpusModule(const char* inpath, const char* outpath) {
     if (path_has_extension(inpath, "xm") || path_has_extension(inpath, "XM")) {
         return writeOpusXM(inpath, outpath);
+    }
+    if (path_has_extension(inpath, "s3m") || path_has_extension(inpath, "S3M")) {
+        return writeOpusS3M(inpath, outpath);
     }
 
     return false;
