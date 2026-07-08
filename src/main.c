@@ -73,20 +73,28 @@ bool decodeOpusModule(const char* inpath, const char* outpath) {
     return false;
 }
 
+void printUsage(char** argv) {
+    printf("Usage: %s [--compress | --decompress] [input] [output]\n", argv[0]);
+}
+
 int main(int argc, char** argv) {
     if (argc == 2) {
         const char* path = argv[1];
         playFile(path);
-    } else if (argc == 3) {
-        const char* inpath = argv[1];
-        const char* outpath = argv[2];
-#if 0
-        writeOpusModule(inpath, outpath);
-#else
-        decodeOpusModule(inpath, outpath);
-#endif
+    } else if (argc == 4) {
+        const char* flag = argv[1];
+        const char* inpath = argv[2];
+        const char* outpath = argv[3];
+        if (strcmp(flag, "--compress") == 0) {
+            writeOpusModule(inpath, outpath);
+        } else if (strcmp(flag, "--decompress") == 0) {
+            decodeOpusModule(inpath, outpath);
+        } else {
+            printUsage(argv);
+            return 1;
+        }
     } else {
-        printf("Usage: %s [audio file]\n", argv[0]);
+        printUsage(argv);
         return 1;
     }
 
