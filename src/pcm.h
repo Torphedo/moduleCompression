@@ -19,11 +19,14 @@ void pcmDeltaEncode8(const int8_t* pcmIn, int8_t* out, uint32_t sampleCount);
 // Encode normal 16-bit PCM to 16-bit delta-coded samples
 void pcmDeltaEncode16(const int16_t* pcmIn, int16_t* out, uint32_t sampleCount);
 
+// Convert 8-bit PCM to 16-bit PCM
 void pcmU8to16(const uint8_t* in, uint16_t* out, uint32_t sampleCount);
+
+// Convert 16-bit PCM to 8-bit PCM
 void pcmU16to8(const uint16_t* in, uint8_t* out, uint32_t sampleCount);
 
-void pcmS8to16(const int8_t* in, int16_t* out, uint32_t sampleCount);
-void pcmS16to8(const int16_t* in, int8_t* out, uint32_t sampleCount);
-
+// Convert signed 16-bit samples to unsigned ones, or vice versa
 void pcmSign16(uint16_t* buf, uint32_t sampleCount);
+
+// Convert signed 8-bit samples to unsigned ones, or vice versa
 void pcmSign8(uint8_t* buf, uint32_t sampleCount);

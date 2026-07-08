@@ -154,7 +154,7 @@ bool decodeOpusSampleS3M(VirtualIO* io, void* data, S3MInstrumentPCM pcm, bool s
 
     // Convert to 8-bit if needed
     if (sampleSize == 1) {
-        pcmS16to8(buf, buf, sampleCount);
+        pcmU16to8(buf, buf, sampleCount);
         bufSize /= 2;
     }
 
