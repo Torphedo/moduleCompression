@@ -80,6 +80,7 @@ add_executable(modTool
     src/main.c
     src/rewriteXM.c
     src/rewriteS3M.c
+    src/pcm.c
     src/VirtualIO.c
 )
 
