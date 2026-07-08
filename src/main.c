@@ -80,7 +80,11 @@ int main(int argc, char** argv) {
     } else if (argc == 3) {
         const char* inpath = argv[1];
         const char* outpath = argv[2];
+#if 0
         writeOpusModule(inpath, outpath);
+#else
+        decodeOpusModule(inpath, outpath);
+#endif
     } else {
         printf("Usage: %s [audio file]\n", argv[0]);
         return 1;

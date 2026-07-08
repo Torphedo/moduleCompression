@@ -90,3 +90,7 @@ typedef struct {
 }XMSampleHeader;
 static_assert(sizeof(XMSampleHeader) == 40, "Wrong XM sample header size!");
 
+static bool XMSampleIs16Bit(XMSampleHeader header) {
+    return header.sampleType & (1 << 4);
+}
+
