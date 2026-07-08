@@ -176,6 +176,7 @@ void rewriteS3M(VirtualIO* in, VirtualIO* out, SampleWriterS3M writeSample) {
         printf("Samples are unsigned!\n");
     }
 
+    int64_t outputSampleOffset = -1;
     for (uint32_t i = 0; i < header.instrumentCount; i++) {
         const uint64_t offset = instrTable[i] * 16; // Pointer is in units of 16 bytes
         VIO_DUAL_SEEK(in, out, offset);
@@ -191,9 +192,20 @@ void rewriteS3M(VirtualIO* in, VirtualIO* out, SampleWriterS3M writeSample) {
             const uint32_t size = instr.pcm.lengthBytes;
             uint32_t sampleOffset = ((uint32_t)instr.pcm.samplePtrHigh << 16) | instr.pcm.samplePtrLow;
             sampleOffset *= 16;
+            if (outputSampleOffset > 0) {
+                // Override original offset to pack samples tighter
+                instr.pcm.samplePtrLow = (outputSampleOffset / 16) & UINT16_MAX;
+                instr.pcm.samplePtrHigh = (outputSampleOffset / 16) >> 16;
+
+                uint32_t test = ((uint32_t)instr.pcm.samplePtrHigh << 16) | instr.pcm.samplePtrLow;
+                assert(test * 16 == outputSampleOffset);
+            } else {
+                outputSampleOffset = sampleOffset;
+            }
 
             // Copy sample data
-            VIO_DUAL_SEEK(in, out, sampleOffset);
+            in->seek(in, sampleOffset);
+            out->seek(out, outputSampleOffset);
             void* sample = malloc(size);
             if (!sample) {
                 printf("Failed to allocate %d bytes to read sample %d!\n", size, i);
@@ -204,7 +216,11 @@ void rewriteS3M(VirtualIO* in, VirtualIO* out, SampleWriterS3M writeSample) {
             free(sample);
 
             const uint64_t sampleEndOffset = out->tell(out);
-            instr.pcm.lengthBytes = sampleEndOffset - sampleOffset;
+            instr.pcm.lengthBytes = sampleEndOffset - outputSampleOffset;
+
+            // Start the next sample immediately after this one, aligned up by 16
+            outputSampleOffset = (sampleEndOffset & ~((uint64_t)0xF)) + 16;
+
             printf("Input audio %d bytes, output audio %d bytes\n", size, instr.pcm.lengthBytes);
 
         }
