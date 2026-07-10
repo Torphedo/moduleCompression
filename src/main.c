@@ -1,6 +1,6 @@
 #include <stdio.h>
-#include <stdlib.h>
-#include <sys/stat.h>
+#include <stdint.h>
+#include <string.h>
 
 #include <miniaudio.h>
 #include <miniaudio_libvorbis.h>
@@ -8,7 +8,6 @@
 #include "miniaudio_ibxm.h"
 #include "miniaudio_it2play.h"
 
-#include <common/path.h>
 #include "rewriteXM.h"
 #include "rewriteS3M.h"
 #include "rewriteMOD.h"
@@ -57,6 +56,18 @@ void playFile(const char* path) {
     }
 
     ma_decoder_uninit(&decoder);
+}
+
+bool path_has_extension(const char* path, const char* expected_ext) {
+    const uint64_t path_len = strlen(path);
+    const uint64_t expected_len = strlen(expected_ext);
+
+    // A match is impossible if the extension is longer than the string
+    if (expected_len > path_len) {
+        return false;
+    }
+    const char* actual_ext = &path[path_len - expected_len];
+    return strncmp(actual_ext, expected_ext, expected_len) == 0;
 }
 
 bool writeOpusModule(const char* inpath, const char* outpath) {

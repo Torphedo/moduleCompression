@@ -25,7 +25,6 @@ include_directories(
     lib/miniaudio
 )
 
-add_subdirectory(lib/bobtail)
 add_subdirectory(lib/opus)
 add_subdirectory(lib/opusfile)
 add_subdirectory(lib/vorbis)
@@ -76,13 +75,14 @@ if(MSVC)
     set(MATH_LIB "")
 endif()
 
-add_executable(modTool
-    src/main.c
+add_library(moduleCompression STATIC
     src/rewriteMOD.c
     src/rewriteXM.c
     src/rewriteS3M.c
-    src/pcm.c
     src/VirtualIO.c
+    src/pcm.c
 )
+target_link_libraries(moduleCompression PUBLIC opusenc opusfile)
 
-target_link_libraries(modTool PRIVATE ma_trackerFormats bobtail opusenc ${MATH_LIB})
+add_executable(modTool src/main.c)
+target_link_libraries(modTool PRIVATE moduleCompression ma_trackerFormats ${MATH_LIB})
