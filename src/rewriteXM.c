@@ -32,7 +32,7 @@ bool writeOpusSampleXM(VirtualIO* io, const void* data, uint32_t size, bool is16
         pcmDeltaDecode16(data, pcmData, sampleCount);
     }
 
-    if (!compressSampleToVIO(io, data, sampleCount, 1)) {
+    if (!compressSampleToVIO(io, pcmData, sampleCount, 1)) {
         printf("Failed to Opus-encode %d samples\n", sampleCount);
         return false;
     }
