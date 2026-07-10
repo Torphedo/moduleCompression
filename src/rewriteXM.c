@@ -5,12 +5,18 @@
 
 #include <opus/opus.h>
 #include <opusfile.h>
-#include "opusenc_stdio.h"
+#include "opusenc_helpers.h"
 #include "xm.h"
 #include "pcm.h"
 #include "VirtualIO.h"
 
 bool writeOpusSampleXM(VirtualIO* io, const void* data, uint32_t size, bool is16Bit) {
+    // The OGG container seems to have ~1KiB minimum overhead
+    if (size < 1024) {
+        io->write(io, data, size); // Just keep raw samples
+        return true;
+    }
+
     const uint8_t sampleSize = is16Bit ? 2 : 1;
     const uint32_t sampleCount = size / sampleSize;
     void* pcmData = malloc(sampleCount * sizeof(int16_t));
@@ -26,61 +32,30 @@ bool writeOpusSampleXM(VirtualIO* io, const void* data, uint32_t size, bool is16
         pcmDeltaDecode16(data, pcmData, sampleCount);
     }
 
-    int error;
-    OggOpusComments* comments = ope_comments_create();
-    OggOpusEnc* enc = ope_encoder_create_callbacks(&opus_vio_impl, io, comments, 48000, 1, 0, &error);
-    if (!enc) {
-        free(pcmData);
-        printf("Failed to create encoder!\n");
+    if (!compressSampleToVIO(io, data, sampleCount, 1)) {
+        printf("Failed to Opus-encode %d samples\n", sampleCount);
         return false;
     }
 
-    printf("Encoding %d frames...\n", sampleCount);
-
-    if (ope_encoder_write(enc, pcmData, sampleCount) != 0) {
-        printf("Failed to encode Opus audio!\n");
-    }
-    ope_encoder_drain(enc);
-    ope_encoder_destroy(enc);
-    ope_comments_destroy(comments);
+    free(pcmData);
     return true;
 }
 
 bool decodeOpusSampleXM(VirtualIO* io, const void* data, uint32_t size, bool is16Bit) {
     int error;
-    OggOpusFile* file = op_open_memory(data, size, &error);
-    if (!file) {
-        printf("Failed to open Opus stream!\n");
-        return false;
-    }
-
-    const int sampleCount = op_pcm_total(file, -1);
-    if (sampleCount < 0) {
-        printf("Failed to get sample count of Opus stream!\n");
-        op_free(file);
-        return false;
-    }
-    ogg_int64_t bufSize = sampleCount * sizeof(uint16_t);
-    void* buf = malloc(bufSize);
+    ogg_int64_t bufSize;
+    void* buf = opus_read_entire_stream(data, size, &error, &bufSize);
     if (!buf) {
-        printf("Failed to allocate %d bytes for uncompressed audio!\n", bufSize);
-        op_free(file);
-        return false;
-    }
-
-    int16_t* bufpos = buf;
-    int totalSamplesRead = 0;
-    while (totalSamplesRead < sampleCount) {
-        const int samplesRead = op_read(file, bufpos, sampleCount, NULL);
-        if (samplesRead < 0) {
-            printf("Failed to decode Opus stream!\n");
-            free(buf);
-            op_free(file);
+        if (error == OP_ENOTFORMAT) {
+            // Not Opus, must be a tiny uncompressed sample
+            io->write(io, data, size);
+            return true;
+        } else {
+            printf("Failed to open Opus stream!\n");
             return false;
         }
-        totalSamplesRead += samplesRead;
-        bufpos += samplesRead;
     }
+    const ogg_int64_t sampleCount = bufSize / sizeof(uint16_t);
 
     // Delta encode in-place
     if (!is16Bit) {
@@ -92,7 +67,6 @@ bool decodeOpusSampleXM(VirtualIO* io, const void* data, uint32_t size, bool is1
 
     io->write(io, buf, bufSize);
     free(buf);
-    op_free(file);
     return true;
 }
 
@@ -174,10 +148,7 @@ void copyInstrumentsXM(VirtualIO* in, VirtualIO* out, uint32_t instrumentCount, 
             if (!(writeSample)(out, buf, sample->length, XMSampleIs16Bit(*sample))) {
                 printf("Failed to write sample %d\n", j);
                 continue;
-            } else {
-                printf("Wrote sample @ 0x%lX\n", sampleStart);
             }
-
             in->free(in, buf);
 
             const size_t sampleEnd = out->tell(out);

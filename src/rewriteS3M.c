@@ -1,9 +1,8 @@
-#include <string.h>
 #include "rewriteS3M.h"
 #include "VirtualIO.h"
 #include "s3m.h"
 #include "pcm.h"
-#include "opusenc_stdio.h"
+#include "opusenc_helpers.h"
 #include "opusfile.h"
 
 // Read a value into a local variable, then write it into another IO stream
@@ -18,12 +17,20 @@ S3MHeader copyNoteDataS3M(VirtualIO* in, VirtualIO* out, const uint16_t** instrP
 
     // Copy pattern order table
     const void* orderTable = in->constRead(in, header.orderCount);
+    if (!orderTable) {
+        printf("Failed to read S3M order table!\n");
+        return header;
+    }
     out->write(out, orderTable, header.orderCount);
     in->free(in, orderTable);
 
     // Copy pointer tables
     const uint16_t* instrPointerTable = in->constRead(in, header.instrumentCount * sizeof(uint16_t));
     const uint16_t* patternPointerTable = in->constRead(in, header.patternPtrCount * sizeof(uint16_t));
+    if (!instrPointerTable || !patternPointerTable) {
+        printf("Failed to read S3M pattern and/or instrument pointer table!\n");
+        return header;
+    }
 
     out->write(out, instrPointerTable, header.instrumentCount * sizeof(uint16_t));
     out->write(out, patternPointerTable, header.patternPtrCount * sizeof(uint16_t));
@@ -36,12 +43,17 @@ S3MHeader copyNoteDataS3M(VirtualIO* in, VirtualIO* out, const uint16_t** instrP
         uint16_t length;
         VIO_COPY_VALUE(in, out, length);
         const void* packedData = in->constRead(in, length - sizeof(length));
+        if (!packedData) {
+            printf("Failed to read S3M pattern data!\n");
+            continue;
+        }
         out->write(out, packedData, length - sizeof(length));
         in->free(in, packedData);
     }
 
     in->free(in, patternPointerTable);
     *instrPtrs = instrPointerTable;
+
     return header;
 }
 
@@ -59,16 +71,6 @@ bool writeOpusSampleS3M(VirtualIO* io, void* data, S3MInstrumentPCM pcm, bool si
     const uint8_t sampleSize = (pcm.flags & S3M_PCM_INSTR_FLAG_16BIT) ? 2 : 1;
     const uint32_t sampleCount = pcm.lengthBytes / (channels * sampleSize);
 
-    OggOpusComments* comments = ope_comments_create();
-    if (!comments) {
-        return false;
-    }
-    OggOpusEnc* enc = ope_encoder_create_callbacks(&opus_vio_impl, io, comments, 48000, channels, 0, NULL);
-    if (!enc) {
-        ope_comments_destroy(comments);
-        return false;
-    }
-
     // Convert to signed values if needed
     if (!signedSamples) {
         if (sampleSize == 1) {
@@ -82,30 +84,31 @@ bool writeOpusSampleS3M(VirtualIO* io, void* data, S3MInstrumentPCM pcm, bool si
     if (sampleSize == 1) {
         pcmBuf = calloc(1, pcm.lengthBytes * 2);
         if (!pcmBuf) {
-            ope_encoder_destroy(enc);
-            ope_comments_destroy(comments);
             return false;
         }
 
         pcmU8to16(data, pcmBuf, sampleCount);
     }
 
-    ope_encoder_write(enc, pcmBuf, sampleCount / channels);
-    ope_encoder_drain(enc);
-    ope_encoder_destroy(enc);
-    ope_comments_destroy(comments);
+    bool result = true;
+    if (!compressSampleToVIO(io, pcmBuf, sampleCount / channels, channels)) {
+        printf("Failed to Opus-encode %d samples\n", sampleCount);
+        result = false;
+    }
 
     if (sampleSize == 1) {
         free(pcmBuf);
     }
-    return true;
+    return result;
 }
 
 bool decodeOpusSampleS3M(VirtualIO* io, void* data, S3MInstrumentPCM pcm, bool signedSamples) {
     const uint8_t sampleSize = (pcm.flags & S3M_PCM_INSTR_FLAG_16BIT) ? 2 : 1;
+
     int error;
-    OggOpusFile* file = op_open_memory(data, pcm.lengthBytes, &error);
-    if (!file) {
+    ogg_int64_t bufSize;
+    void* buf = opus_read_entire_stream(data, pcm.lengthBytes, &error, &bufSize);
+    if (!buf) {
         if (error == OP_ENOTFORMAT) {
             // Not Opus, must be a tiny uncompressed sample
             io->write(io, data, pcm.lengthBytes);
@@ -115,34 +118,7 @@ bool decodeOpusSampleS3M(VirtualIO* io, void* data, S3MInstrumentPCM pcm, bool s
             return false;
         }
     }
-
-    const int sampleCount = op_pcm_total(file, -1);
-    if (sampleCount < 0) {
-        printf("Failed to get sample count of Opus stream!\n");
-        op_free(file);
-        return false;
-    }
-    ogg_int64_t bufSize = sampleCount * sizeof(uint16_t);
-    void* buf = calloc(1, bufSize);
-    if (!buf) {
-        printf("Failed to allocate %ld bytes for uncompressed audio!\n", bufSize);
-        op_free(file);
-        return false;
-    }
-
-    int16_t* bufpos = buf;
-    int totalSamplesRead = 0;
-    while (totalSamplesRead < sampleCount) {
-        const int samplesRead = op_read(file, bufpos, sampleCount, NULL);
-        if (samplesRead < 0) {
-            printf("Failed to decode Opus stream!\n");
-            free(buf);
-            op_free(file);
-            return false;
-        }
-        totalSamplesRead += samplesRead;
-        bufpos += samplesRead;
-    }
+    const ogg_int64_t sampleCount = bufSize / sizeof(uint16_t);
 
     // Convert to 8-bit if needed
     if (sampleSize == 1) {
@@ -161,7 +137,6 @@ bool decodeOpusSampleS3M(VirtualIO* io, void* data, S3MInstrumentPCM pcm, bool s
 
     io->write(io, buf, bufSize);
     free(buf);
-    op_free(file);
     return true;
 }
 
