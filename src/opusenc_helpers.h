@@ -33,11 +33,13 @@ static bool compressSampleToVIO(VirtualIO* io, const void* pcm, uint32_t sampleC
         return false;
     }
 
-    ope_encoder_write(enc, pcm, sampleCount);
+    int error = ope_encoder_write(enc, pcm, sampleCount);
+    bool result = (error == 0);
+
     ope_encoder_drain(enc);
     ope_encoder_destroy(enc);
     ope_comments_destroy(comments);
-    return true;
+    return result;
 }
 
 static void* opus_read_entire_stream(const void* data, uint32_t size, int* errorOut, ogg_int64_t* bufSizeOut) {

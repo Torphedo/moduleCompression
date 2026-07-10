@@ -5,12 +5,6 @@
 #include "opusenc_helpers.h"
 #include "opusfile.h"
 
-// Read a value into a local variable, then write it into another IO stream
-#define VIO_COPY_VALUE(in, out, local) (in)->read((in), &(local), sizeof(local)); (out)->write((out), &(local), sizeof(local))
-
-// Seek 2 streams to the same offset
-#define VIO_DUAL_SEEK(s1, s2, offset) (s1)->seek((s1), offset); (s2)->seek((s2), offset)
-
 S3MHeader copyNoteDataS3M(VirtualIO* in, VirtualIO* out, const uint16_t** instrPtrs) {
     S3MHeader header;
     VIO_COPY_VALUE(in, out, header);

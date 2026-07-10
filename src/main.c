@@ -11,6 +11,7 @@
 #include <common/path.h>
 #include "rewriteXM.h"
 #include "rewriteS3M.h"
+#include "rewriteMOD.h"
 
 void data_callback(ma_device* pDevice, void* pOutput, const void* pInput, ma_uint32 frameCount) {
     ma_decoder* dec = pDevice->pUserData;
@@ -65,6 +66,9 @@ bool writeOpusModule(const char* inpath, const char* outpath) {
     if (path_has_extension(inpath, "s3m") || path_has_extension(inpath, "S3M")) {
         return writeOpusS3M(inpath, outpath);
     }
+    if (path_has_extension(inpath, "mod") || path_has_extension(inpath, "MOD")) {
+        return writeOpusMOD(inpath, outpath);
+    }
 
     return false;
 }
@@ -75,6 +79,9 @@ bool decodeOpusModule(const char* inpath, const char* outpath) {
     }
     if (path_has_extension(inpath, "s3m") || path_has_extension(inpath, "S3M")) {
         return decodeOpusS3M(inpath, outpath);
+    }
+    if (path_has_extension(inpath, "mod") || path_has_extension(inpath, "MOD")) {
+        return decodeOpusMOD(inpath, outpath);
     }
 
     return false;

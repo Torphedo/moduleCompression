@@ -27,6 +27,13 @@ struct VirtualIO {
     VirtualIOFree free;
 };
 
+// Read a value into a local variable, then write it into another IO stream
+#define VIO_COPY_VALUE(in, out, local) (in)->read((in), &(local), sizeof(local)); (out)->write((out), &(local), sizeof(local))
+
+// Seek 2 streams to the same offset
+#define VIO_DUAL_SEEK(s1, s2, offset) (s1)->seek((s1), offset); (s2)->seek((s2), offset)
+
+
 VirtualIO vioOpenPath(const char* path, bool writeMode);
 VirtualIO vioOpenStdio(FILE* f);
 VirtualIO vioOpenMemory(void* buf, uint32_t size);

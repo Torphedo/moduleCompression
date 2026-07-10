@@ -78,6 +78,7 @@ endif()
 
 add_executable(modTool
     src/main.c
+    src/rewriteMOD.c
     src/rewriteXM.c
     src/rewriteS3M.c
     src/pcm.c
