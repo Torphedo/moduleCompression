@@ -70,6 +70,18 @@ bool decodeOpusSampleXM(VirtualIO* io, const void* data, uint32_t size, bool is1
     return true;
 }
 
+XMHeader copyHeaderXM(VirtualIO* in, VirtualIO* out) {
+    XMHeader header = {0};
+    VIO_COPY_VALUE(in, out, header);
+
+    // Copy the order table
+    const uint32_t remaining = header.headerSize - (sizeof(header) - offsetof(XMHeader, headerSize));
+    uint8_t patterns[256];
+    in->read(in, &patterns, remaining);
+    out->write(out, &patterns, remaining);
+
+    return header;
+}
 
 void copyPatternsXM(VirtualIO* in, VirtualIO* out, uint16_t patternCount) {
     for (uint32_t i = 0; i < patternCount; i++) {
@@ -180,10 +192,7 @@ bool writeOpusXM(const char* inpath, const char* outpath) {
         return false;
     }
 
-    XMHeader header = {0};
-    in.read(&in, &header, sizeof(header));
-    out.write(&out, &header, sizeof(header));
-
+    XMHeader header = copyHeaderXM(&in, &out);
     copyPatternsXM(&in, &out, header.patternCount);
     copyInstrumentsXM(&in, &out, header.instrumentCount, writeOpusSampleXM);
 
@@ -202,10 +211,7 @@ bool decodeOpusXM(const char* inpath, const char* outpath) {
         return false;
     }
 
-    XMHeader header = {0};
-    in.read(&in, &header, sizeof(header));
-    out.write(&out, &header, sizeof(header));
-
+    XMHeader header = copyHeaderXM(&in, &out);
     copyPatternsXM(&in, &out, header.patternCount);
     copyInstrumentsXM(&in, &out, header.instrumentCount, decodeOpusSampleXM);
 

@@ -19,9 +19,8 @@ typedef struct {
     uint16_t flags;
     uint16_t defaultTempo;
     uint16_t defaultBPM;
-    uint8_t patternOrderTable[256];
 }XMHeader;
-static_assert(sizeof(XMHeader) == 336, "Wrong XM header size!");
+static_assert(sizeof(XMHeader) == 80, "Wrong XM header size!");
 
 
 // Disable struct padding, otherwise our structs won't match the file and
@@ -84,7 +83,7 @@ typedef struct {
     uint8_t fineTune;
     uint8_t sampleType; // e.g. loop, ping-pong
     uint8_t panning;
-    uint8_t relativeNoteNum;
+    int8_t relativeNoteNum;
     uint8_t reserved;
     char sampleName[22];
 }XMSampleHeader;
