@@ -38,6 +38,16 @@ The main library (all the C files in `src` except `main.c`) relies on
 there will be a static library target named `moduleCompression` that compiles
 everything for you. Your C compiler must support C11 (for `static_assert`).
 
+If you want to support direct playback of Opus modules, the easiest way is to
+have the compressor output to a memory-backed `VirtualIO` instance (like I do in
+the bundled audio player). This gives you normal module data you can feed to
+your player, assuming it's flexible enough to take a buffer instead of a file.
+I recommend [IBXM](https://github.com/martincameron/micromod/tree/master/ibxm-ac)
+for MOD/XM/S3M, and [IT2Play](https://github.com/8bitbubsy/it2play)
+(a C port of the Impulse Tracker source code) for IT playback. I'm using 
+[custom Miniaudio extensions](https://github.com/Torphedo/miniaudio_trackerFormats)
+to play all module formats through a single API.
+
 ### CLI Tool
 `src/main.c` is a CLI tool that wraps the main library (via `--compress` and
 `--decompress`) and acts as an audio player (when given just 1 argument).
