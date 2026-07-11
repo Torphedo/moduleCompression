@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
+#include <stdlib.h>
+#include <sys/stat.h>
 
 #include <miniaudio.h>
 #include <miniaudio_libvorbis.h>
@@ -13,6 +15,82 @@
 #include "rewriteS3M.h"
 #include "rewriteIT.h"
 
+bool path_has_extension(const char* path, const char* expected_ext) {
+    const uint64_t path_len = strlen(path);
+    const uint64_t expected_len = strlen(expected_ext);
+
+    // A match is impossible if the extension is longer than the string
+    if (expected_len > path_len) {
+        return false;
+    }
+    const char* actual_ext = &path[path_len - expected_len];
+    return strncmp(actual_ext, expected_ext, expected_len) == 0;
+}
+
+bool has_either_ext(const char* str, const char* ext1, const char* ext2) {
+    return path_has_extension(str, ext1) || path_has_extension(str, ext2);
+}
+
+bool isModule(const char* path) {
+    return has_either_ext(path, "xm", "XM") ||
+           has_either_ext(path, "s3m", "S3M") ||
+           has_either_ext(path, "mod", "MOD") ||
+           has_either_ext(path, "it", "IT");
+}
+
+bool writeOpusModule(const char* inpath, VirtualIO* in, VirtualIO* out) {
+    if (has_either_ext(inpath, "xm", "XM")) {
+        return writeOpusXM(in, out);
+    }
+    if (has_either_ext(inpath, "s3m", "S3M")) {
+        return writeOpusS3M(in, out);
+    }
+    if (has_either_ext(inpath, "mod", "MOD")) {
+        return writeOpusMOD(in, out);
+    }
+    if (has_either_ext(inpath, "it", "IT")) {
+        return writeOpusIT(in, out);
+    }
+
+    return false;
+}
+
+bool decodeOpusModule(const char* inpath, VirtualIO* in, VirtualIO* out) {
+    if (has_either_ext(inpath, "xm", "XM")) {
+        return decodeOpusXM(in, out);
+    }
+    if (has_either_ext(inpath, "s3m", "S3M")) {
+        return decodeOpusS3M(in, out);
+    }
+    if (has_either_ext(inpath, "mod", "MOD")) {
+        return decodeOpusMOD(in, out);
+    }
+    if (has_either_ext(inpath, "it", "IT")) {
+        return decodeOpusIT(in, out);
+    }
+
+    return false;
+}
+
+void* loadFile(const char* path, uint32_t* sizeOut) {
+    struct stat st;
+    stat(path, &st);
+    *sizeOut = st.st_size;
+    FILE* f = fopen(path, "rb");
+    if (!f) {
+        return NULL;
+    }
+    void* buf = malloc(*sizeOut);
+    if (!buf) {
+        fclose(f);
+        return NULL;
+    }
+
+    fread(buf, *sizeOut, 1, f);
+    fclose(f);
+    return buf;
+}
+
 void data_callback(ma_device* pDevice, void* pOutput, const void* pInput, ma_uint32 frameCount) {
     ma_decoder* dec = pDevice->pUserData;
 
@@ -20,7 +98,7 @@ void data_callback(ma_device* pDevice, void* pOutput, const void* pInput, ma_uin
     ma_decoder_read_pcm_frames(dec, pOutput, frameCount, &framesRead);
 }
 
-void playFile(const char* path) {
+void playFile(const void* data, uint32_t size) {
     ma_decoding_backend_vtable* customDecoders[] = {
         ma_decoding_backend_libvorbis,
         ma_decoding_backend_libopus,
@@ -36,7 +114,9 @@ void playFile(const char* path) {
     cfg.pCustomBackendUserData = NULL;
 
     ma_decoder decoder = {};
-    ma_result ma_res = ma_decoder_init_file(path, &cfg, &decoder);
+    ma_result ma_res;
+    ma_res = ma_decoder_init_memory(data, size, &cfg, &decoder);
+
     if (ma_res != MA_SUCCESS) {
         printf("Failed to setup audio decoder!\n");
         return;
@@ -59,52 +139,6 @@ void playFile(const char* path) {
     ma_decoder_uninit(&decoder);
 }
 
-bool path_has_extension(const char* path, const char* expected_ext) {
-    const uint64_t path_len = strlen(path);
-    const uint64_t expected_len = strlen(expected_ext);
-
-    // A match is impossible if the extension is longer than the string
-    if (expected_len > path_len) {
-        return false;
-    }
-    const char* actual_ext = &path[path_len - expected_len];
-    return strncmp(actual_ext, expected_ext, expected_len) == 0;
-}
-
-bool writeOpusModule(const char* inpath, const char* outpath) {
-    if (path_has_extension(inpath, "xm") || path_has_extension(inpath, "XM")) {
-        return writeOpusXM(inpath, outpath);
-    }
-    if (path_has_extension(inpath, "s3m") || path_has_extension(inpath, "S3M")) {
-        return writeOpusS3M(inpath, outpath);
-    }
-    if (path_has_extension(inpath, "mod") || path_has_extension(inpath, "MOD")) {
-        return writeOpusMOD(inpath, outpath);
-    }
-    if (path_has_extension(inpath, "it") || path_has_extension(inpath, "IT")) {
-        return writeOpusIT(inpath, outpath);
-    }
-
-    return false;
-}
-
-bool decodeOpusModule(const char* inpath, const char* outpath) {
-    if (path_has_extension(inpath, "xm") || path_has_extension(inpath, "XM")) {
-        return decodeOpusXM(inpath, outpath);
-    }
-    if (path_has_extension(inpath, "s3m") || path_has_extension(inpath, "S3M")) {
-        return decodeOpusS3M(inpath, outpath);
-    }
-    if (path_has_extension(inpath, "mod") || path_has_extension(inpath, "MOD")) {
-        return decodeOpusMOD(inpath, outpath);
-    }
-    if (path_has_extension(inpath, "it") || path_has_extension(inpath, "IT")) {
-        return decodeOpusIT(inpath, outpath);
-    }
-
-    return false;
-}
-
 void printUsage(char** argv) {
     printf("Usage: %s [--compress | --decompress] [input] [output]\n", argv[0]);
 }
@@ -112,22 +146,44 @@ void printUsage(char** argv) {
 int main(int argc, char** argv) {
     if (argc == 2) {
         const char* path = argv[1];
-        playFile(path);
+        uint32_t size;
+        void* data = loadFile(path, &size);
+        if (isModule(path)) {
+            VirtualIO in = vioOpenPath(path, false);
+            VirtualIO out = vioOpenExpandableMemory(size * 5);
+            printf("Decompressing module...\n");
+            decodeOpusModule(path, &in, &out);
+            in.close(&in);
+            printf("Done. Starting playback...\n");
+
+            const void* decodedBuf = vioMemGetBuffer(out);
+            uint32_t decodedSize = vioMemGetBufferSize(out);
+            playFile(decodedBuf, decodedSize);
+            out.close(&out);
+        } else {
+            playFile(data, size);
+        }
+
+        free(data);
     } else if (argc == 4) {
         const char* flag = argv[1];
         const char* inpath = argv[2];
         const char* outpath = argv[3];
+        VirtualIO in = vioOpenPath(inpath, false);
+        VirtualIO out = vioOpenPath(outpath, true);
+
         if (strcmp(flag, "--compress") == 0) {
-            writeOpusModule(inpath, outpath);
+            writeOpusModule(inpath, &in, &out);
         } else if (strcmp(flag, "--decompress") == 0) {
-            decodeOpusModule(inpath, outpath);
+            decodeOpusModule(inpath, &in, &out);
         } else {
             printUsage(argv);
             return 1;
         }
+        in.close(&in);
+        out.close(&out);
     } else {
         printUsage(argv);
         return 1;
     }
-
 }
