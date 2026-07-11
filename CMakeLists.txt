@@ -79,6 +79,7 @@ add_library(moduleCompression STATIC
     src/rewriteMOD.c
     src/rewriteXM.c
     src/rewriteS3M.c
+    src/rewriteIT.c
     src/VirtualIO.c
     src/pcm.c
 )

@@ -25,6 +25,9 @@ void pcmU8to16(const uint8_t* in, uint16_t* out, uint32_t sampleCount);
 // Convert 16-bit PCM to 8-bit PCM
 void pcmU16to8(const uint16_t* in, uint8_t* out, uint32_t sampleCount);
 
+// Convert 16-bit samples from big to little endian, or vice versa
+void pcmByteSwap16(uint16_t* buf, uint32_t sampleCount);
+
 // Convert signed 16-bit samples to unsigned ones, or vice versa
 void pcmSign16(uint16_t* buf, uint32_t sampleCount);
 

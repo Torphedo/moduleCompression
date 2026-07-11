@@ -78,6 +78,14 @@ void pcmU16to8(const uint16_t* in, uint8_t* out, uint32_t sampleCount) {
     }
 }
 
+void pcmByteSwap16(uint16_t* buf, uint32_t sampleCount) {
+    for (uint32_t i = 0; i < sampleCount; i++) {
+        const uint16_t sample = buf[i];
+        const uint16_t sampleOut = (sample >> 8) | (sample << 8);
+        buf[i] = sampleOut;
+    }
+}
+
 // Inverting just the sign bit maps negative values to the lower half of the
 // unsigned range, and positive ones to the upper half. It also works to do the reverse.
 

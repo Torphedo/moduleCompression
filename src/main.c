@@ -8,9 +8,10 @@
 #include "miniaudio_ibxm.h"
 #include "miniaudio_it2play.h"
 
+#include "rewriteMOD.h"
 #include "rewriteXM.h"
 #include "rewriteS3M.h"
-#include "rewriteMOD.h"
+#include "rewriteIT.h"
 
 void data_callback(ma_device* pDevice, void* pOutput, const void* pInput, ma_uint32 frameCount) {
     ma_decoder* dec = pDevice->pUserData;
@@ -80,6 +81,9 @@ bool writeOpusModule(const char* inpath, const char* outpath) {
     if (path_has_extension(inpath, "mod") || path_has_extension(inpath, "MOD")) {
         return writeOpusMOD(inpath, outpath);
     }
+    if (path_has_extension(inpath, "it") || path_has_extension(inpath, "IT")) {
+        return writeOpusIT(inpath, outpath);
+    }
 
     return false;
 }
@@ -93,6 +97,9 @@ bool decodeOpusModule(const char* inpath, const char* outpath) {
     }
     if (path_has_extension(inpath, "mod") || path_has_extension(inpath, "MOD")) {
         return decodeOpusMOD(inpath, outpath);
+    }
+    if (path_has_extension(inpath, "it") || path_has_extension(inpath, "IT")) {
+        return decodeOpusIT(inpath, outpath);
     }
 
     return false;
