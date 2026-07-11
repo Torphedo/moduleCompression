@@ -12,6 +12,10 @@ bool noopCopySample(VirtualIO* io, const void* data, uint32_t size, ITSample sam
 }
 
 bool writeOpusSampleIT(VirtualIO* io, const void* data, uint32_t size, ITSample sample) {
+    if (size < 1024) {
+        return noopCopySample(io, data, size, sample);
+    }
+
     assert(!(sample.convertFlags & IT_CONVERT_DELTA_CODED) && "Delta coded samples aren't supported yet!");
     assert(!(sample.convertFlags & IT_CONVERT_BYTE_DELTA_CODED) && "Delta coded byte samples aren't supported yet!");
     assert(!(sample.convertFlags & IT_CONVERT_TXWAVE) && "TXWave 12-bit samples aren't supported yet!");
@@ -72,8 +76,7 @@ bool decodeOpusSampleIT(VirtualIO* io, const void* data, uint32_t size, ITSample
     if (!buf) {
         if (error == OP_ENOTFORMAT) {
             // Not Opus, must be a tiny uncompressed sample
-            noopCopySample(io, data, size, sample);
-            return true;
+            return noopCopySample(io, data, size, sample);
         } else {
             printf("Failed to open Opus stream!\n");
             return false;
@@ -169,17 +172,26 @@ bool copyIT(VirtualIO* in, VirtualIO* out, SampleWriter writeSample) {
         VIO_COPY_VALUE(in, out, instr);
     }
 
+    uint32_t nextSampleOutOffset = 0;
     for (uint32_t i = 0; i < header.sampleCount; i++) {
         VIO_DUAL_SEEK(in, out, samplePtrs[i]);
         ITSample sample;
-        VIO_COPY_VALUE(in, out, sample);
+        in->read(in, &sample, sizeof(sample));
         assert(!(sample.flags & IT_SAMPLE_COMPRESSED) && "Compressed samples not supported yet!");
 
         uint32_t sampleSize = sample.sampleCount;
         if (sample.flags & IT_SAMPLE_16BIT) {
             sampleSize *= 2;
         }
-        VIO_DUAL_SEEK(in, out, sample.dataPtr);
+
+        in->seek(in, sample.dataPtr);
+        if (nextSampleOutOffset > 0) {
+            out->seek(out, nextSampleOutOffset);
+        } else {
+            out->seek(out, sample.dataPtr);
+        }
+        const uint32_t sampleOutStart = out->tell(out);
+
         const void* data = in->constRead(in, sampleSize);
         if (!data) {
             printf("Unable to read sample data!\n");
@@ -187,7 +199,21 @@ bool copyIT(VirtualIO* in, VirtualIO* out, SampleWriter writeSample) {
         }
 
         (writeSample)(out, data, sampleSize, sample);
+        const uint32_t sampleEnd = out->tell(out);
+        const uint32_t outSize = sampleEnd - sampleOutStart;
         in->free(in, data);
+        nextSampleOutOffset = sampleOutStart + outSize;
+
+        sample.dataPtr = sampleOutStart;
+        sample.sampleCount = outSize;
+        if (sample.flags & IT_SAMPLE_16BIT) {
+            if (sample.sampleCount % 2 != 0) {
+                sample.sampleCount++;
+            }
+            sample.sampleCount /= 2;
+        }
+        out->seek(out, samplePtrs[i]);
+        out->write(out, &sample, sizeof(sample));
     }
 
     for (uint32_t i = 0; i < header.patternCount; i++) {
