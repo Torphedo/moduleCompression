@@ -136,6 +136,7 @@ bool decodeOpusSampleS3M(VirtualIO* io, void* data, S3MInstrumentPCM pcm, bool s
 
 typedef bool (*SampleWriterS3M)(VirtualIO* io, void* data, S3MInstrumentPCM pcm, bool signedSamples);
 
+// Copy an S3M file, with a callback to copy sample data
 void rewriteS3M(VirtualIO* in, VirtualIO* out, SampleWriterS3M writeSample) {
     const uint16_t* instrTable;
     S3MHeader header = copyNoteDataS3M(in, out, &instrTable);
@@ -187,11 +188,10 @@ void rewriteS3M(VirtualIO* in, VirtualIO* out, SampleWriterS3M writeSample) {
             const uint64_t sampleEndOffset = out->tell(out);
             instr.pcm.lengthBytes = sampleEndOffset - outputSampleOffset;
 
-            // Start the next sample immediately after this one, aligned up by 16
+            // Start the next sample immediately after this one, rounded up by 16
             outputSampleOffset = (sampleEndOffset & ~((uint64_t)0xF)) + 16;
 
             printf("Input audio %d bytes, output audio %d bytes\n", size, instr.pcm.lengthBytes);
-
         }
 
         out->seek(out, offset);

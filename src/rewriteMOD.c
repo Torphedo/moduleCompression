@@ -1,49 +1,11 @@
 #include "rewriteMOD.h"
 #include <string.h>
 #include <stdlib.h>
-#include <assert.h>
 #include "VirtualIO.h"
 #include "mod.h"
 #include "pcm.h"
 #include "endian.h"
 #include "opusenc_helpers.h"
-
-typedef enum {
-    MOD_STD_15SAMPLE,
-    MOD_STD_31SAMPLE,
-}MODType;
-
-bool strMatch4(const char* s1, const char* s2) {
-    return strncmp(s1, s2, 4) == 0;
-}
-
-MODType getMODType(const char magic[4], uint8_t* channelsOut) {
-    const bool mk31 = strMatch4(magic, "M.K.") || strMatch4(magic, "M&K!");
-    const bool mk64 = strMatch4(magic, "M!K!");
-    const bool xCHN = strncmp(&magic[1], "CHN", 3) == 0;
-    const bool xxCH = strncmp(&magic[2], "CH", 2) == 0;
-    const bool TDZx = strncmp(magic, "TDZ", 3) == 0;
-    const bool FLTx = strncmp(magic, "FLT", 3) == 0;
-    const bool is8chan = strMatch4(magic, "CD81") || strMatch4(magic, "OCTA") || strMatch4(magic, "OKTA");
-
-    uint8_t channels = 4;
-    MODType result = MOD_STD_31SAMPLE;
-    if (mk31 || mk64) {
-    } else if (xCHN) {
-        channels = magic[0] - '0';
-    } else if (xxCH) {
-        channels = 10 * (magic[0] - '0') + (magic[1] - '0');
-    } else if (TDZx || FLTx) {
-        channels = (magic[3] - '0');
-    } else if (is8chan) {
-        channels = 8;
-    } else {
-        result = MOD_STD_15SAMPLE;
-    }
-
-    *channelsOut = channels;
-    return result;
-}
 
 uint8_t getPatternCount(const uint8_t* patternTable) {
     // Find largest pattern index
@@ -120,13 +82,6 @@ bool decodeOpusSampleMOD(VirtualIO* io, const void* data, uint32_t size) {
 
 
 typedef bool (*SampleWriter)(VirtualIO* io, const void* data, uint32_t size);
-
-bool noopWriteSample(VirtualIO* io, const void* data, uint32_t size) {
-    io->write(io, data, size);
-    return true;
-}
-
-
 bool copyMOD(VirtualIO* in, VirtualIO* out, SampleWriter writeSample) {
     char title[20];
     VIO_COPY_VALUE(in, out, title);

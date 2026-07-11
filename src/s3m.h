@@ -1,7 +1,10 @@
 #pragma once
 #include <stdint.h>
 #include <assert.h>
-// Offsets are always given in units of 16 bytes.
+// Structures for Scream Tracker 3's S3M music format.
+// Offsets are usually given in units of 16 bytes
+// https://moddingwiki.shikadi.net/wiki/S3M_Format
+// https://pollak.thebe.de/b/the-s3m-format/
 
 typedef struct {
     char title[28];
@@ -11,7 +14,7 @@ typedef struct {
     uint16_t orderCount; // Should be even
     uint16_t instrumentCount;
     uint16_t patternPtrCount;
-    uint16_t flags; // See below
+    uint16_t flags;
     uint16_t trackerVersion;
     uint16_t sampleType; // 1=signed samples [deprecated], 2=unsigned samples
     char magic[4]; // "SCRM"
@@ -22,11 +25,9 @@ typedef struct {
     uint8_t ultraClickRemoval;
     uint8_t defaultPan;
     uint8_t reserved2[8]; // Unused, some trackers store data here
-    uint16_t ptrSpecial; // Parapointer to additional data, if <tt>flags</tt> has bit 7 set
+    uint16_t ptrSpecial; // Parapointer to additional data, if flags has bit 7 set
     uint8_t channelSettings[32];
     uint8_t orderList[];
-    // uint16_t ptrInstruments[instrumentCount]; // List of parapointers to each instrument's data
-    // uint16_t ptrPatterns[patternPtrCount]; // List of parapointers to each pattern's data
 }S3MHeader;
 
 enum {
@@ -76,7 +77,7 @@ static_assert(sizeof(S3MInstrumentPCM) == sizeof(S3MInstrumentSynth), "S3M Synth
 #pragma pack(pop, r1)
 
 typedef struct {
-    uint8_t type; // 1 == PCM instrument
+    uint8_t type;
     char filename[12]; // 8.3 filename format
     union {
         S3MInstrumentSynth synth;

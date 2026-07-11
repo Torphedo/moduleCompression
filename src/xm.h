@@ -1,4 +1,9 @@
 #pragma once
+// Structures for FastTracker II's XM music format. Sources:
+// https://gist.github.com/loveemu/737ace92f08b439a416adc829ae2aa76
+// https://www.celersms.com/doc/XM_file_format.pdf
+// https://pollak.thebe.de/b/the-xm-format/
+
 #include <stdint.h>
 #include <assert.h>
 
@@ -11,7 +16,7 @@ typedef struct {
     uint8_t versionMinor;
     uint32_t headerSize;
 
-    uint16_t songLength;
+    uint16_t songLength; // Determines length of order table
     uint16_t songRestartPos;
     uint16_t channelCount;
     uint16_t patternCount; // Max = 256
@@ -19,6 +24,7 @@ typedef struct {
     uint16_t flags;
     uint16_t defaultTempo;
     uint16_t defaultBPM;
+    uint8_t orderTable[];
 }XMHeader;
 static_assert(sizeof(XMHeader) == 80, "Wrong XM header size!");
 
@@ -75,21 +81,27 @@ typedef struct {
 static_assert(sizeof(XMSampleSettings) == 310, "Wrong XM instrument sample settings size!");
 #pragma pack(pop, r1)
 
+enum {
+    XM_SAMPLE_LOOP = 0b01,
+    XM_SAMPLE_PINGPONG = 0b11,
+    XM_SAMPLEFLAG_16BIT = 1 << 4,
+};
+
 typedef struct {
     uint32_t length;
     uint32_t loopStart;
     uint32_t loopLength;
     uint8_t volume;
     uint8_t fineTune;
-    uint8_t sampleType; // e.g. loop, ping-pong
+    uint8_t sampleType; // e.g. loop, ping-pong, 16-bit samples
     uint8_t panning;
     int8_t relativeNoteNum;
-    uint8_t reserved;
+    uint8_t reserved; // If this is 0xAD, samples are ADPCM encoded
     char sampleName[22];
 }XMSampleHeader;
 static_assert(sizeof(XMSampleHeader) == 40, "Wrong XM sample header size!");
 
 static bool XMSampleIs16Bit(XMSampleHeader header) {
-    return header.sampleType & (1 << 4);
+    return header.sampleType & XM_SAMPLEFLAG_16BIT;
 }
 

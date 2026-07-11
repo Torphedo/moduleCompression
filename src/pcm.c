@@ -1,5 +1,4 @@
 #include "pcm.h"
-#include <assert.h>
 
 void pcmDeltaDecode8(const int8_t* sample, int8_t* pcmOut, uint32_t sampleCount) {
     int16_t amp;
@@ -37,31 +36,21 @@ void pcmDeltaEncode16to8(const int16_t* pcmIn, int8_t* out, uint32_t sampleCount
         new = pcmIn[i] >> 8; // Convert to 8-bit magnitude
         const int8_t diff = new - old;
 
-        const int8_t result = old + diff;
-        // Despite the diff value overflowing, the truncated 8-bit diff will end
-        // up reaching the target sample value via over/underflow
-        assert(result == new);
-
         out[i] = diff;
         old = new;
     }
 }
-
 
 void pcmDeltaEncode8(const int8_t* pcmIn, int8_t* out, uint32_t sampleCount) {
     int8_t old = 0, new;
     for (uint32_t i = 0; i < sampleCount; i++) {
         new = pcmIn[i];
-        int8_t diff = new - old;
-        const int8_t result = old + diff;
-        // Despite the diff value overflowing, the truncated 8-bit diff will end
-        // up reaching the target sample value via over/underflow
-        assert(result == new);
+        const int8_t diff = new - old;
+
         out[i] = diff;
         old = new;
     }
 }
-
 
 void pcmDeltaEncode16(const int16_t* pcmIn, int16_t* out, uint32_t sampleCount) {
     int16_t old = 0, new;
@@ -89,9 +78,12 @@ void pcmU16to8(const uint16_t* in, uint8_t* out, uint32_t sampleCount) {
     }
 }
 
+// Inverting just the sign bit maps negative values to the lower half of the
+// unsigned range, and positive ones to the upper half. It also works to do the reverse.
+
 void pcmSign16(uint16_t* buf, uint32_t sampleCount) {
     for (uint32_t i = 0; i < sampleCount; i++) {
-        const uint16_t sample = ((uint16_t*)buf)[i];
+        const uint16_t sample = buf[i];
         // Invert the sign bit
         const uint16_t sampleOut = (sample & INT16_MAX) | (~sample & 0x8000);
         buf[i] = sampleOut;
@@ -100,7 +92,7 @@ void pcmSign16(uint16_t* buf, uint32_t sampleCount) {
 
 void pcmSign8(uint8_t* buf, uint32_t sampleCount) {
     for (uint32_t i = 0; i < sampleCount; i++) {
-        const uint8_t sample = ((uint8_t*)buf)[i];
+        const uint8_t sample = buf[i];
         // Invert the sign bit
         const uint8_t sampleOut = (sample & INT8_MAX) | (~sample & 0x80);
         buf[i] = sampleOut;
