@@ -1,7 +1,7 @@
 #include "pcm.h"
 
 void pcmDeltaDecode8(const int8_t* sample, int8_t* pcmOut, uint32_t sampleCount) {
-    int16_t amp;
+    int16_t amp = 0;
     for (uint32_t i = 0; i < sampleCount; i++) {
         amp += sample[i];
         // The sample may go beyond the 8-bit boundary, just grab the signed 8-bit portion
@@ -10,7 +10,7 @@ void pcmDeltaDecode8(const int8_t* sample, int8_t* pcmOut, uint32_t sampleCount)
 }
 
 void pcmDeltaDecode16(const int16_t* sample, int16_t* pcmOut, uint32_t sampleCount) {
-    int32_t amp;
+    int32_t amp = 0;
     for (uint32_t i = 0; i < sampleCount; i++) {
         amp += sample[i];
         // The sample may go beyond the 16-bit boundary, just grab the signed 16-bit portion
@@ -21,12 +21,12 @@ void pcmDeltaDecode16(const int16_t* sample, int16_t* pcmOut, uint32_t sampleCou
 // Decode 8-bit delta-coded samples, and convert to 16-bit PCM
 void pcmDelta8to16(const int8_t* sample, int16_t* pcmOut, uint32_t sampleCount) {
     int16_t amp = 0;
-    for( uint32_t i = 0; i < sampleCount; i++ ) {
+    for(uint32_t i = 0; i < sampleCount; i++) {
         amp += sample[i]; // Calculate next sample value
 
         // The sample may go beyond the 8-bit boundary, just grab the signed
         // 8-bit portion but at 16-bit magnitude.
-        pcmOut[i] = amp << 8;
+        pcmOut[i] = (amp << 8) | (amp & 0xFF);
     }
 }
 
