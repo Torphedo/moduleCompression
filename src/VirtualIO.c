@@ -140,6 +140,14 @@ void vioMemSeek(VirtualIO* io, uint32_t pos) {
 void vioStubFree(VirtualIO* io, const void* buf) {
 }
 
+void vioMemClose(VirtualIO* io) {
+    VirtualIOMemCtx* ctx = io->ctx;
+    if (ctx->expandableBuf) {
+        free(ctx->buf);
+    }
+    return;
+}
+
 VirtualIO vioOpenMemory(void* buf, uint32_t size) {
     VirtualIOMemCtx* ctx = calloc(1, sizeof(*ctx));
     if (!ctx) {
@@ -150,7 +158,7 @@ VirtualIO vioOpenMemory(void* buf, uint32_t size) {
     ctx->size = size;
     VirtualIO io = {
         .ctx = ctx,
-        .close = vioStubClose,
+        .close = vioMemClose,
         .write = vioMemWrite,
         .read = vioMemRead,
         .seek = vioMemSeek,
@@ -162,7 +170,7 @@ VirtualIO vioOpenMemory(void* buf, uint32_t size) {
 }
 
 VirtualIO vioOpenExpandableMemory(uint32_t initialSize) {
-    const void* buf = calloc(1, initialSize);
+    void* buf = calloc(1, initialSize);
     if (!buf) {
         VirtualIO io = {0};
         return io;
