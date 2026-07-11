@@ -12,14 +12,14 @@ bool noopCopySample(VirtualIO* io, const void* data, uint32_t size, ITSample sam
 }
 
 bool writeOpusSampleIT(VirtualIO* io, const void* data, uint32_t size, ITSample sample) {
-    assert(!(sample.flags & IT_CONVERT_DELTA_CODED) && "Delta coded samples aren't supported yet!");
-    assert(!(sample.flags & IT_CONVERT_BYTE_DELTA_CODED) && "Delta coded byte samples aren't supported yet!");
-    assert(!(sample.flags & IT_CONVERT_TXWAVE) && "TXWave 12-bit samples aren't supported yet!");
+    assert(!(sample.convertFlags & IT_CONVERT_DELTA_CODED) && "Delta coded samples aren't supported yet!");
+    assert(!(sample.convertFlags & IT_CONVERT_BYTE_DELTA_CODED) && "Delta coded byte samples aren't supported yet!");
+    assert(!(sample.convertFlags & IT_CONVERT_TXWAVE) && "TXWave 12-bit samples aren't supported yet!");
     assert(!(sample.flags & IT_SAMPLE_COMPRESSED) && "Compressed samples not supported yet!");
 
     // Allocate buffer for 16-bit samples
     const bool is16Bit = sample.flags & IT_SAMPLE_16BIT;
-    const bool isSigned = sample.flags & IT_CONVERT_SIGNED;
+    const bool isSigned = sample.convertFlags & IT_CONVERT_SIGNED;
     const uint32_t outBufSize = sample.sampleCount * sizeof(uint16_t);
     void* pcmBuf = malloc(outBufSize);
     if (!pcmBuf) {
@@ -30,7 +30,7 @@ bool writeOpusSampleIT(VirtualIO* io, const void* data, uint32_t size, ITSample 
     if (is16Bit) {
         assert(outBufSize == size);
         memcpy(pcmBuf, data, outBufSize);
-        if (sample.flags & IT_CONVERT_BIG_ENDIAN) {
+        if (sample.convertFlags & IT_CONVERT_BIG_ENDIAN) {
             pcmByteSwap16(pcmBuf, sample.sampleCount);
         }
         if (!isSigned) {
@@ -63,6 +63,57 @@ bool writeOpusSampleIT(VirtualIO* io, const void* data, uint32_t size, ITSample 
     free(pcmBuf);
 
     return result;
+}
+
+bool decodeOpusSampleIT(VirtualIO* io, const void* data, uint32_t size, ITSample sample) {
+    int error;
+    ogg_int64_t bufSize;
+    void* buf = opus_read_entire_stream(data, size, &error, &bufSize);
+    if (!buf) {
+        if (error == OP_ENOTFORMAT) {
+            // Not Opus, must be a tiny uncompressed sample
+            noopCopySample(io, data, size, sample);
+            return true;
+        } else {
+            printf("Failed to open Opus stream!\n");
+            return false;
+        }
+    }
+    const ogg_int64_t sampleCount = bufSize / sizeof(uint16_t);
+    const bool is16Bit = sample.flags & IT_SAMPLE_16BIT;
+    const bool isSigned = sample.convertFlags & IT_CONVERT_SIGNED;
+    const bool bigEndian = sample.convertFlags & IT_CONVERT_BIG_ENDIAN;
+    assert(!(sample.convertFlags & IT_CONVERT_DELTA_CODED) && "Delta coded samples aren't supported yet!");
+    assert(!(sample.convertFlags & IT_CONVERT_BYTE_DELTA_CODED) && "Delta coded byte samples aren't supported yet!");
+    assert(!(sample.convertFlags & IT_CONVERT_TXWAVE) && "TXWave 12-bit samples aren't supported yet!");
+    assert(!(sample.flags & IT_SAMPLE_COMPRESSED) && "Compressed samples not supported yet!");
+
+    // Convert to 8-bit if needed
+    if (!is16Bit) {
+        pcmU16to8(buf, buf, sampleCount);
+        bufSize /= 2;
+    }
+
+    // Convert to unsigned values if needed
+    if (!isSigned) {
+        if (is16Bit) {
+            pcmSign16(buf, sampleCount);
+        } else {
+            pcmSign8(buf, sampleCount);
+        }
+    }
+
+    if (bigEndian) {
+        if (is16Bit) {
+            pcmByteSwap16(buf, sampleCount);
+        } else {
+            printf("Sample is marked as big endian but also 8-bit, which doesn't make sense. Ignoring.\n");
+        }
+    }
+
+    io->write(io, buf, bufSize);
+    free(buf);
+    return true;
 }
 
 typedef bool (*SampleWriter)(VirtualIO* io, const void* data, uint32_t size, ITSample sample);
@@ -171,7 +222,7 @@ bool writeOpusIT(const char* inpath, const char* outpath) {
         return false;
     }
 
-    return copyIT(&in, &out, noopCopySample);
+    return copyIT(&in, &out, writeOpusSampleIT);
 }
 
 bool decodeOpusIT(const char* inpath, const char* outpath) {
@@ -184,5 +235,5 @@ bool decodeOpusIT(const char* inpath, const char* outpath) {
         return false;
     }
 
-    return copyIT(&in, &out, noopCopySample);
+    return copyIT(&in, &out, decodeOpusSampleIT);
 }
