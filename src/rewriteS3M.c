@@ -200,34 +200,12 @@ void rewriteS3M(VirtualIO* in, VirtualIO* out, SampleWriterS3M writeSample) {
     in->free(in, instrTable);
 }
 
-bool writeOpusS3M(const char* inpath, const char* outpath) {
-    VirtualIO in = vioOpenPath(inpath, false);
-    VirtualIO out = vioOpenPath(outpath, true);
-    if (!in.ctx || !out.ctx) {
-        in.close(&in);
-        out.close(&out);
-        printf("Failed to open one of the files!\n");
-        return false;
-    }
-
-    rewriteS3M(&in, &out, writeOpusSampleS3M);
-    in.close(&in);
-    out.close(&out);
+bool writeOpusS3M(VirtualIO* in, VirtualIO* out) {
+    rewriteS3M(in, out, writeOpusSampleS3M);
     return true;
 }
 
-bool decodeOpusS3M(const char* inpath, const char* outpath) {
-    VirtualIO in = vioOpenPath(inpath, false);
-    VirtualIO out = vioOpenPath(outpath, true);
-    if (!in.ctx || !out.ctx) {
-        in.close(&in);
-        out.close(&out);
-        printf("Failed to open one of the files!\n");
-        return false;
-    }
-
-    rewriteS3M(&in, &out, decodeOpusSampleS3M);
-    in.close(&in);
-    out.close(&out);
+bool decodeOpusS3M(VirtualIO* in, VirtualIO* out) {
+    rewriteS3M(in, out, decodeOpusSampleS3M);
     return true;
 }

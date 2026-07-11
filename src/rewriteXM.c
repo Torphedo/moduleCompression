@@ -182,40 +182,16 @@ void copyInstrumentsXM(VirtualIO* in, VirtualIO* out, uint32_t instrumentCount, 
     printf("Converted %d bytes input audio to %d bytes output audio\n", totalOriginalSize, totalOutSize);
 }
 
-bool writeOpusXM(const char* inpath, const char* outpath) {
-    VirtualIO in = vioOpenPath(inpath, false);
-    VirtualIO out = vioOpenPath(outpath, true);
-    if (!in.ctx || !out.ctx) {
-        in.close(&in);
-        out.close(&out);
-        printf("Failed to open one of the files!\n");
-        return false;
-    }
-
-    XMHeader header = copyHeaderXM(&in, &out);
-    copyPatternsXM(&in, &out, header.patternCount);
-    copyInstrumentsXM(&in, &out, header.instrumentCount, writeOpusSampleXM);
-
-    in.close(&in);
-    out.close(&out);
+bool writeOpusXM(VirtualIO* in, VirtualIO* out) {
+    XMHeader header = copyHeaderXM(in, out);
+    copyPatternsXM(in, out, header.patternCount);
+    copyInstrumentsXM(in, out, header.instrumentCount, writeOpusSampleXM);
     return true;
 }
 
-bool decodeOpusXM(const char* inpath, const char* outpath) {
-    VirtualIO in = vioOpenPath(inpath, false);
-    VirtualIO out = vioOpenPath(outpath, true);
-    if (!in.ctx || !out.ctx) {
-        in.close(&in);
-        out.close(&out);
-        printf("Failed to open one of the files!\n");
-        return false;
-    }
-
-    XMHeader header = copyHeaderXM(&in, &out);
-    copyPatternsXM(&in, &out, header.patternCount);
-    copyInstrumentsXM(&in, &out, header.instrumentCount, decodeOpusSampleXM);
-
-    in.close(&in);
-    out.close(&out);
+bool decodeOpusXM(VirtualIO* in, VirtualIO* out) {
+    XMHeader header = copyHeaderXM(in, out);
+    copyPatternsXM(in, out, header.patternCount);
+    copyInstrumentsXM(in, out, header.instrumentCount, decodeOpusSampleXM);
     return true;
 }

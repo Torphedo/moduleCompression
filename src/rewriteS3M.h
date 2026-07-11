@@ -1,6 +1,7 @@
 #pragma once
 #include <stdbool.h>
+#include "VirtualIO.h"
 
-bool writeOpusS3M(const char* inpath, const char* outpath);
+bool writeOpusS3M(VirtualIO* in, VirtualIO* out);
 
-bool decodeOpusS3M(const char* inpath, const char* outpath);
+bool decodeOpusS3M(VirtualIO* in, VirtualIO* out);

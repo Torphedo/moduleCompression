@@ -238,28 +238,10 @@ bool copyIT(VirtualIO* in, VirtualIO* out, SampleWriter writeSample) {
     return true;
 }
 
-bool writeOpusIT(const char* inpath, const char* outpath) {
-    VirtualIO in = vioOpenPath(inpath, false);
-    VirtualIO out = vioOpenPath(outpath, true);
-    if (!in.ctx || !out.ctx) {
-        in.close(&in);
-        out.close(&out);
-        printf("Failed to open one of the files!\n");
-        return false;
-    }
-
-    return copyIT(&in, &out, writeOpusSampleIT);
+bool writeOpusIT(VirtualIO* in, VirtualIO* out) {
+    return copyIT(in, out, writeOpusSampleIT);
 }
 
-bool decodeOpusIT(const char* inpath, const char* outpath) {
-    VirtualIO in = vioOpenPath(inpath, false);
-    VirtualIO out = vioOpenPath(outpath, true);
-    if (!in.ctx || !out.ctx) {
-        in.close(&in);
-        out.close(&out);
-        printf("Failed to open one of the files!\n");
-        return false;
-    }
-
-    return copyIT(&in, &out, decodeOpusSampleIT);
+bool decodeOpusIT(VirtualIO* in, VirtualIO* out) {
+    return copyIT(in, out, decodeOpusSampleIT);
 }

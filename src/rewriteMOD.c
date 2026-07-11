@@ -145,28 +145,10 @@ bool copyMOD(VirtualIO* in, VirtualIO* out, SampleWriter writeSample) {
     return true;
 }
 
-bool writeOpusMOD(const char* inpath, const char* outpath) {
-    VirtualIO in = vioOpenPath(inpath, false);
-    VirtualIO out = vioOpenPath(outpath, true);
-    if (!in.ctx || !out.ctx) {
-        in.close(&in);
-        out.close(&out);
-        printf("Failed to open one of the files!\n");
-        return false;
-    }
-
-    return copyMOD(&in, &out, writeOpusSampleMOD);
+bool writeOpusMOD(VirtualIO* in, VirtualIO* out) {
+    return copyMOD(in, out, writeOpusSampleMOD);
 }
 
-bool decodeOpusMOD(const char* inpath, const char* outpath) {
-    VirtualIO in = vioOpenPath(inpath, false);
-    VirtualIO out = vioOpenPath(outpath, true);
-    if (!in.ctx || !out.ctx) {
-        in.close(&in);
-        out.close(&out);
-        printf("Failed to open one of the files!\n");
-        return false;
-    }
-
-    return copyMOD(&in, &out, decodeOpusSampleMOD);
+bool decodeOpusMOD(VirtualIO* in, VirtualIO* out) {
+    return copyMOD(in, out, decodeOpusSampleMOD);
 }
