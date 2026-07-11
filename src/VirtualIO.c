@@ -61,6 +61,9 @@ VirtualIO vioOpenStdio(FILE* f) {
 }
 
 typedef struct {
+    // Whether we control the allocation of the buffer, or the caller does. If
+    // we don't control allocation, we can't expand it on writes
+    bool expandableBuf;
     void* buf;
     uint32_t size;
     uint32_t pos;
@@ -79,8 +82,8 @@ uint32_t vioMemSafeSize(const VirtualIOMemCtx* ctx, uint32_t size) {
 
 void vioMemAdvance(VirtualIOMemCtx* ctx, uint32_t size) {
     ctx->pos += size;
-    if (ctx->pos > size) {
-        ctx->pos = size;
+    if (ctx->pos > ctx->size) {
+        ctx->pos = ctx->size;
     }
 }
 
@@ -102,11 +105,24 @@ const void* vioMemConstRead(VirtualIO* io, uint32_t size) {
 
 bool vioMemWrite(VirtualIO* io, const void* buf, uint32_t size) {
     VirtualIOMemCtx* ctx = io->ctx;
+    if (ctx->expandableBuf) {
+        const uint32_t requiredSize = ctx->pos + size;
+        if (requiredSize >= ctx->size) {
+            const uint32_t newSize = requiredSize * 1.5;
+            ctx->buf = realloc(ctx->buf, newSize);
+            if (!ctx->buf) {
+                printf("Failed to expand buffer to %d bytes!\n");
+                return false;
+            }
+            ctx->size = newSize;
+        }
+    }
+
     void* pos = (void*)((uintptr_t)ctx->buf + ctx->pos);
     const uint32_t copySize = vioMemSafeSize(ctx, size);
     memcpy(pos, buf, copySize);
     vioMemAdvance(ctx, copySize);
-    return false;
+    return true;
 }
 
 uint32_t vioMemTell(const VirtualIO* io) {
@@ -125,11 +141,13 @@ void vioStubFree(VirtualIO* io, const void* buf) {
 }
 
 VirtualIO vioOpenMemory(void* buf, uint32_t size) {
-    VirtualIOMemCtx* ctx = malloc(sizeof(*ctx));
+    VirtualIOMemCtx* ctx = calloc(1, sizeof(*ctx));
     if (!ctx) {
         VirtualIO io = {0};
         return io;
     }
+    ctx->buf = buf;
+    ctx->size = size;
     VirtualIO io = {
         .ctx = ctx,
         .close = vioStubClose,
@@ -141,4 +159,31 @@ VirtualIO vioOpenMemory(void* buf, uint32_t size) {
         .free = vioStubFree,
     };
     return io;
+}
+
+VirtualIO vioOpenExpandableMemory(uint32_t initialSize) {
+    const void* buf = calloc(1, initialSize);
+    if (!buf) {
+        VirtualIO io = {0};
+        return io;
+    }
+    VirtualIO io = vioOpenMemory(buf, initialSize);
+    if (!io.ctx) {
+        VirtualIO io = {0};
+        return io;
+    }
+    VirtualIOMemCtx* ctx = io.ctx;
+    ctx->expandableBuf = true;
+
+    return io;
+}
+
+const void* vioMemGetBuffer(VirtualIO io) {
+    VirtualIOMemCtx* ctx = io.ctx;
+    return ctx->buf;
+}
+
+uint32_t vioMemGetBufferSize(VirtualIO io) {
+    VirtualIOMemCtx* ctx = io.ctx;
+    return ctx->size;
 }

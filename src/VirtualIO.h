@@ -37,4 +37,7 @@ struct VirtualIO {
 VirtualIO vioOpenPath(const char* path, bool writeMode);
 VirtualIO vioOpenStdio(FILE* f);
 VirtualIO vioOpenMemory(void* buf, uint32_t size);
+VirtualIO vioOpenExpandableMemory(uint32_t initialSize);
 
+const void* vioMemGetBuffer(VirtualIO io);
+uint32_t vioMemGetBufferSize(VirtualIO io);
