@@ -113,32 +113,6 @@ typedef struct {
 }ITInstrument;
 static_assert(sizeof(ITInstrument) == 554, "Wrong IT instrument size!");
 
-// Pre-2.00 format
-typedef struct {
-    char magic[4]; // "IMPI" (IMPulse Instrument)
-    char filename[12]; // 8.3 filename format
-    uint8_t reserved;
-    uint8_t flags;
-    uint8_t volumeLoopStart;
-    uint8_t volumeLoopEnd;
-    uint8_t sustainLoopStart;
-    uint8_t sustainLoopEnd;
-    uint16_t reserved2;
-    int16_t fadeOut;
-    uint8_t newNoteAction;
-    uint8_t duplicateNoteCheck;
-    uint16_t trackerVersion; // Instrument files only
-    uint8_t sampleCount; // Instrument files only
-    uint8_t reserved3;
-    char instrumentName[26];
-    uint8_t reserved4[6];
-
-    uint16_t keyboardTable[120];
-    uint8_t volumeEnvelope[200];
-    uint8_t volumeEnvelopeNodes[50];
-}ITOldInstrument;
-static_assert(sizeof(ITOldInstrument) == 554, "Wrong IT old instrument size!");
-
 typedef struct {
     char magic[4]; // "IMPS" (IMPulse Sample)
     char filename[12]; // 8.3 filename format

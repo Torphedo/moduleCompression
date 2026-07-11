@@ -22,6 +22,3 @@ do {                                                    \
     }                                                   \
     val = _foreign.portable;                            \
 } while(0)
-
-/// A wrapper around ENDIAN_FLIP() for floats
-#define ENDIAN_FLIP_FLOAT(val) ENDIAN_FLIP(uint32_t, *((u32*)&val))

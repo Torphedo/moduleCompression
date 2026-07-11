@@ -84,8 +84,3 @@ typedef struct {
         S3MInstrumentPCM pcm;
     };
 }S3MInstrumentHeader;
-
-typedef struct {
-    uint16_t packedLenBytes; // Includes the 2 bytes used for this value
-    uint8_t packedData[];
-}S3MPattern;
